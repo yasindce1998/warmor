@@ -5,15 +5,34 @@ Warmor is an **eBPF-based policy enforcer** that utilizes **WASM** for policy ex
 
 ## Architecture Diagram
 ```mermaid
-graph TD;
-    A[Workload (Linux/Windows)] -->|System Calls| B[eBPF Hooks];
-    B -->|Policy Enforcement| C[WASM Runtime (WasmEdge)];
-    C -->|Executes Policies| D[Enforcer];
-    D -->|Metrics Collection| E[Prometheus];
-    D -->|Policy Violations| F[Alerting System];
-    E -->|Visualization| G[Grafana];
-    F -->|Notifies Admins| H[Slack/Webhook];
-    D -->|Logs| I[Persistent Storage];
+flowchart TD
+    subgraph "⚙️ Workloads"
+        A["💻 Linux/Windows Workload"]
+    end
+
+    subgraph "🛡️ Monitoring & Enforcement"
+        B["🪝 eBPF Hooks"]
+        C["🎭 WASM Runtime (WasmEdge)"]
+        D["👮 Policy Enforcer"]
+    end
+
+    subgraph "🔍 Observability & Alerts"
+        E["📊 Prometheus (Metrics)"]
+        F["🔔 Alerting System"]
+        G["📈 Grafana (Visualization)"]
+        H["📨 Slack/Webhook (Notifications)"]
+        I["🗄️ Persistent Storage (Logs)"]
+    end
+
+    A -->|🔄 System Calls| B
+    B -->|🛡️ Policy Enforcement| C
+    C -->|📜 Executes Policies| D
+    D -->|📊 Metrics Collection| E
+    D -->|⚠️ Policy Violations| F
+    E -->|📈 Visualization| G
+    F -->|📨 Notifies Admins| H
+    D -->|📂 Logs| I
+
 ```
 
 ## Components
