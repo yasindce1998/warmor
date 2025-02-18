@@ -1,5 +1,10 @@
 # Warmor: eBPF & WASM-Based Policy Enforcer
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/55cb3f75-fb55-4537-858d-8c7b94facbc2" alt="image-removebg-preview">
+</p>
+
+
 ## Overview
 
 Warmor is an **eBPF-based policy enforcer** that runs **WASM-compiled policies** to secure workloads across **Linux and Windows** environments. It integrates with **Kubernetes** and runs as an **operator** to enforce security policies dynamically.
