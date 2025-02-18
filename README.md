@@ -91,6 +91,17 @@ Then, access Grafana at `http://localhost:3000`.
 ## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+## Platform & OS Support Table
+
+| Platform/OS        | WASM Execution | eBPF Support | Warmor Support |
+|--------------------|---------------|-------------|---------------|
+| **Linux (x86_64)** | ✅ Yes         | ✅ Yes      | ✅ Fully Supported |
+| **Linux (ARM64)**  | ✅ Yes         | ✅ Yes      | ✅ Fully Supported |
+| **Linux (RISC-V)** | ⚠️ Partial    | ⚠️ Partial  | ⚠️ Experimental |
+| **Windows (x86_64)** | ✅ Yes (WasmEdge) | ⚠️ Partial (eBPF for Windows) | ⚠️ Limited |
+| **macOS (x86_64)** | ✅ Yes         | ❌ No       | ❌ No eBPF Support |
+| **macOS (ARM64/M1/M2)** | ✅ Yes | ❌ No | ❌ No eBPF Support |
+
 
 ## License
 
