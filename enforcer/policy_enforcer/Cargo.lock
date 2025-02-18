@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "policy"
+name = "policy_enforcer"
 version = "0.1.0"
