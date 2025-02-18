@@ -46,6 +46,16 @@ func main() {
 		log.Fatalf("Failed to execute WASM function: %v", err)
 	}
 
-	// Print the policy decision
-	fmt.Printf("Policy Decision: %v\n", res)
+	// Interpret the policy decision
+    decision := res[0].(int32)
+    fmt.Printf("Policy Decision: %v\n", decision)
+
+    // Handle the policy decision
+    if decision == 1 {
+        fmt.Println("Action allowed.")
+        // Proceed with the action
+    } else {
+        fmt.Println("Action denied.")
+        // Take appropriate measures
+    }
 }
