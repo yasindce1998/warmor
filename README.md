@@ -30,8 +30,6 @@ Warmor uses **WASM for policy logic** and **eBPF for enforcement**, combining hi
 3. **Operator & Kubernetes Integration**: Runs as a Kubernetes operator for automated policy enforcement.
 4. **Observability Stack**: Prometheus collects metrics, and Grafana visualizes violations.
 
-
-
 ## Directory Structure
 
 ```
@@ -91,6 +89,7 @@ Then, access Grafana at `http://localhost:3000`.
 ## Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
 ## Platform & OS Support Table
 
 | Platform/OS        | WASM Execution | eBPF Support | Warmor Support |
@@ -101,7 +100,6 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 | **Windows (x86_64)** | ✅ Yes (WasmEdge) | ⚠️ Partial (eBPF for Windows) | ⚠️ Limited |
 | **macOS (x86_64)** | ✅ Yes         | ❌ No       | ❌ No eBPF Support |
 | **macOS (ARM64/M1/M2)** | ✅ Yes | ❌ No | ❌ No eBPF Support |
-
 
 ## License
 
