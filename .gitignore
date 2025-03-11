@@ -28,3 +28,6 @@ go.work.sum
 enforcer/policy_enforcer/target/
 enforcer/policy_enforcer/Cargo.lock
 enforcer/policy_enforcer/wasm32-unknown-unknown/
+
+# VS Code
+.vscode

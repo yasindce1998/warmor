@@ -1,0 +1,42 @@
+policies:
+  - uid: 0
+    process: "/bin/bash"
+    action: "deny"
+    reason: "Prevent root shell access"
+    
+  - uid: 1000
+    process: "/usr/bin/python3"
+    action: "deny"
+    reason: "User 1000 denied to run Python scripts"
+    
+  - uid: 1001
+    process: "/usr/bin/node"
+    action: "allow"
+    reason: "User 1001 allowed to run Node.js applications"
+
+  - uid: 1000
+    process: "/usr/bin/gcc"
+    action: "deny"
+    reason: "Prevent user 1000 from compiling binaries"
+
+  - uid: 2000
+    process: "/usr/sbin/nginx"
+    action: "allow"
+    reason: "Allow Nginx web server to run"
+
+  - uid: 2000
+    process: "/usr/bin/mysql"
+    action: "deny"
+    reason: "Prevent user 2000 from running MySQL manually"
+
+  - uid: 3000
+    process: "/bin/sh"
+    action: "deny"
+    reason: "Restrict user 3000 from accessing shell"
+  
+  - uid: 1000
+    process: "/tmp/go-build*"
+    action: "deny"
+    reason: "Block Go build processes"
+
+
