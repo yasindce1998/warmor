@@ -3,106 +3,129 @@ package enforcer
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/yasindce1998/warmor/internal/cache"
 	"github.com/yasindce1998/warmor/internal/ebpf"
+	"github.com/yasindce1998/warmor/internal/logging"
+	"github.com/yasindce1998/warmor/internal/metrics"
 	"github.com/yasindce1998/warmor/internal/wasm"
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
 // Enforcer integrates eBPF event capture with WASM policy evaluation
 type Enforcer struct {
-	ebpfLoader  *ebpf.Loader
-	wasmRuntime *wasm.Runtime
-	policy      *wasm.Policy
-	policyPath  string
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
-
-	// Statistics
-	stats struct {
-		sync.RWMutex
-		totalEvents   uint64
-		allowedEvents uint64
-		deniedEvents  uint64
-		loggedEvents  uint64
-		totalDuration time.Duration
-		minDuration   time.Duration
-		maxDuration   time.Duration
-	}
+	ebpfLoader    *ebpf.Loader
+	wasmRuntime   *wasm.Runtime
+	evaluator     *wasm.PolicyEvaluator
+	cache         *cache.DecisionCache
+	actionHandler *ActionHandler
+	logger        *logging.Logger
+	metricsServer *metrics.Server
+	policyPath    string
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
 }
 
-// New creates a new enforcer instance
+// New creates a new enforcer instance with Phase 2 features
 func New(ctx context.Context, policyPath string) (*Enforcer, error) {
-	log.Println("Initializing warmor enforcer...")
+	hostname, _ := os.Hostname()
+
+	// Initialize logger
+	logger := logging.NewLogger("info")
+	logger.LogStartup(policyPath)
 
 	// Load eBPF program
-	log.Println("Loading eBPF program...")
+	logger.LogInfo("Loading eBPF program...")
 	ebpfLoader, err := ebpf.Load()
 	if err != nil {
 		return nil, fmt.Errorf("load eBPF: %w", err)
 	}
-	log.Println("✓ eBPF program loaded")
+	logger.LogInfo("✓ eBPF program loaded")
 
 	// Create WASM runtime
-	log.Println("Creating WASM runtime...")
+	logger.LogInfo("Creating WASM runtime...")
 	wasmRuntime, err := wasm.NewRuntime(ctx)
 	if err != nil {
 		ebpfLoader.Close()
 		return nil, fmt.Errorf("create WASM runtime: %w", err)
 	}
-	log.Println("✓ WASM runtime created")
+	logger.LogInfo("✓ WASM runtime created")
 
 	// Load policy
-	log.Printf("Loading policy from: %s", policyPath)
+	logger.LogInfo(fmt.Sprintf("Loading policy from: %s", policyPath))
 	if err := wasmRuntime.LoadPolicy(ctx, policyPath); err != nil {
 		wasmRuntime.Close(ctx)
 		ebpfLoader.Close()
 		return nil, fmt.Errorf("load policy: %w", err)
 	}
-	log.Println("✓ Policy loaded")
+	logger.LogInfo("✓ Policy loaded")
 
 	// Create policy instance
-	log.Println("Creating policy instance...")
+	logger.LogInfo("Creating policy instance...")
 	policy, err := wasm.NewPolicy(ctx, wasmRuntime)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		ebpfLoader.Close()
 		return nil, fmt.Errorf("create policy: %w", err)
 	}
-	log.Println("✓ Policy instance created")
+	logger.LogInfo("✓ Policy instance created")
+
+	// Create policy evaluator with context
+	evaluator := wasm.NewPolicyEvaluator(policy, hostname)
+
+	// Initialize decision cache (10k entries, 5min TTL)
+	decisionCache := cache.NewDecisionCache(10000, 5*time.Minute)
+	logger.LogInfo("✓ Decision cache initialized (10k entries, 5min TTL)")
+
+	// Initialize action handler
+	actionHandler := NewActionHandler()
+
+	// Initialize metrics server
+	metricsServer := metrics.NewServer(9090)
+	metrics.SetPolicyInfo(policyPath, "1.0.0")
+	logger.LogInfo("✓ Metrics server initialized on :9090")
 
 	ctx, cancel := context.WithCancel(ctx)
 
-	enforcer := &Enforcer{
-		ebpfLoader:  ebpfLoader,
-		wasmRuntime: wasmRuntime,
-		policy:      policy,
-		policyPath:  policyPath,
-		ctx:         ctx,
-		cancel:      cancel,
-	}
-
-	// Initialize min duration to max value
-	enforcer.stats.minDuration = time.Duration(1<<63 - 1)
-
-	return enforcer, nil
+	return &Enforcer{
+		ebpfLoader:    ebpfLoader,
+		wasmRuntime:   wasmRuntime,
+		evaluator:     evaluator,
+		cache:         decisionCache,
+		actionHandler: actionHandler,
+		logger:        logger,
+		metricsServer: metricsServer,
+		policyPath:    policyPath,
+		ctx:           ctx,
+		cancel:        cancel,
+	}, nil
 }
 
 // Start begins processing events
 func (e *Enforcer) Start() {
+	// Start metrics server
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		if err := e.metricsServer.Start(); err != nil {
+			e.logger.LogError(err, "metrics server stopped")
+		}
+	}()
+
+	// Start event processing
 	e.wg.Add(1)
 	go e.eventLoop()
+
+	e.logger.LogInfo("Enforcer started, processing events...")
 }
 
 // eventLoop processes events from eBPF and evaluates them with WASM
 func (e *Enforcer) eventLoop() {
 	defer e.wg.Done()
-
-	log.Println("Enforcer started, processing events...")
 
 	for {
 		select {
@@ -112,7 +135,8 @@ func (e *Enforcer) eventLoop() {
 			// Read event from eBPF
 			ebpfEvent, err := e.ebpfLoader.ReadEvent()
 			if err != nil {
-				log.Printf("Error reading event: %v", err)
+				e.logger.LogError(err, "error reading event")
+				metrics.RecordProcessingError()
 				continue
 			}
 
@@ -126,118 +150,117 @@ func (e *Enforcer) eventLoop() {
 				Timestamp: ebpfEvent.Timestamp,
 			}
 
-			// Evaluate with WASM policy
-			start := time.Now()
-			action, err := e.policy.Evaluate(e.ctx, event)
-			duration := time.Since(start)
-
-			if err != nil {
-				log.Printf("Error evaluating policy: %v", err)
-				action = api.ActionDeny // Fail closed
-			}
-
-			// Update statistics
-			e.updateStats(action, duration)
-
-			// Log the decision
-			e.logDecision(event, action, duration)
+			// Handle the event
+			e.handleEvent(event)
 		}
 	}
 }
 
-// updateStats updates enforcement statistics
-func (e *Enforcer) updateStats(action api.Action, duration time.Duration) {
-	e.stats.Lock()
-	defer e.stats.Unlock()
-
-	e.stats.totalEvents++
-	e.stats.totalDuration += duration
-
-	if duration < e.stats.minDuration {
-		e.stats.minDuration = duration
-	}
-	if duration > e.stats.maxDuration {
-		e.stats.maxDuration = duration
+// handleEvent processes a single event with caching and metrics
+func (e *Enforcer) handleEvent(event *api.Event) {
+	// Check cache first
+	if result, hit := e.cache.Get(event); hit {
+		metrics.RecordCacheHit()
+		e.actionHandler.Enforce(e.ctx, event, result)
+		e.logger.LogEvent(event, result)
+		metrics.RecordEvent(result.Action.String())
+		metrics.RecordLatency(float64(result.Latency.Microseconds()))
+		return
 	}
 
-	switch action {
-	case api.ActionAllow:
-		e.stats.allowedEvents++
-	case api.ActionDeny:
-		e.stats.deniedEvents++
-	case api.ActionLog:
-		e.stats.loggedEvents++
-	}
-}
+	metrics.RecordCacheMiss()
 
-// logDecision logs the enforcement decision
-func (e *Enforcer) logDecision(event *api.Event, action api.Action, duration time.Duration) {
-	// Use different log levels based on action
-	switch action {
-	case api.ActionDeny:
-		log.Printf("[DENY] PID=%d UID=%d COMM=%s FILE=%s (eval_time=%v)",
-			event.PID, event.UID, event.Comm, event.Filename, duration)
-	case api.ActionLog:
-		log.Printf("[LOG] PID=%d UID=%d COMM=%s FILE=%s (eval_time=%v)",
-			event.PID, event.UID, event.Comm, event.Filename, duration)
-	case api.ActionAllow:
-		// Only log allows in debug mode to reduce noise
-		// log.Printf("[ALLOW] PID=%d UID=%d COMM=%s FILE=%s (eval_time=%v)",
-		// 	event.PID, event.UID, event.Comm, event.Filename, duration)
+	// Evaluate with policy
+	result, err := e.evaluator.Evaluate(e.ctx, event)
+	if err != nil {
+		e.logger.LogError(err, "policy evaluation failed")
+		metrics.RecordProcessingError()
+		// Fail closed - deny on error
+		result = &api.ActionResult{
+			Action:    api.ActionDeny,
+			Reason:    fmt.Sprintf("Evaluation error: %v", err),
+			Timestamp: time.Now(),
+			Cached:    false,
+			Latency:   0,
+		}
 	}
+
+	// Cache the decision
+	e.cache.Put(event, result)
+
+	// Enforce the decision
+	e.actionHandler.Enforce(e.ctx, event, result)
+
+	// Log the event
+	e.logger.LogEvent(event, result)
+	if result.Action == api.ActionDeny {
+		e.logger.LogDenial(event, result)
+	}
+
+	// Record metrics
+	metrics.RecordEvent(result.Action.String())
+	metrics.RecordLatency(float64(result.Latency.Microseconds()))
+
+	// Update cache size metric
+	cacheStats := e.cache.Stats()
+	metrics.UpdateCacheSize(cacheStats.Size)
 }
 
 // GetStats returns current statistics
-func (e *Enforcer) GetStats() Stats {
-	e.stats.RLock()
-	defer e.stats.RUnlock()
+func (e *Enforcer) GetStats() api.EnforcementStats {
+	actionStats := e.actionHandler.GetStats()
+	cacheStats := e.cache.Stats()
 
-	avgDuration := time.Duration(0)
-	if e.stats.totalEvents > 0 {
-		avgDuration = e.stats.totalDuration / time.Duration(e.stats.totalEvents)
-	}
-
-	return Stats{
-		TotalEvaluations: e.stats.totalEvents,
-		AllowedActions:   e.stats.allowedEvents,
-		DeniedActions:    e.stats.deniedEvents,
-		LoggedActions:    e.stats.loggedEvents,
-		TotalDuration:    e.stats.totalDuration,
-		AverageDuration:  avgDuration,
-		MinDuration:      e.stats.minDuration,
-		MaxDuration:      e.stats.maxDuration,
+	return api.EnforcementStats{
+		Allowed:     actionStats.Allowed,
+		Denied:      actionStats.Denied,
+		Logged:      actionStats.Logged,
+		CacheHits:   cacheStats.TotalHits,
+		CacheMisses: actionStats.Allowed + actionStats.Denied + actionStats.Logged - cacheStats.TotalHits,
 	}
 }
 
 // PrintStats prints current statistics
 func (e *Enforcer) PrintStats() {
 	stats := e.GetStats()
+	cacheStats := e.cache.Stats()
 
-	if stats.TotalEvaluations == 0 {
-		log.Println("=== Statistics ===")
-		log.Println("No events processed yet")
-		log.Println("==================")
+	// Log structured stats
+	e.logger.LogStats(&stats)
+
+	// Print human-readable stats
+	total := stats.Allowed + stats.Denied + stats.Logged
+	if total == 0 {
+		fmt.Println("\n=== Warmor Statistics ===")
+		fmt.Println("No events processed yet")
+		fmt.Println("========================")
 		return
 	}
 
-	allowedPct := float64(stats.AllowedActions) / float64(stats.TotalEvaluations) * 100
-	deniedPct := float64(stats.DeniedActions) / float64(stats.TotalEvaluations) * 100
-	loggedPct := float64(stats.LoggedActions) / float64(stats.TotalEvaluations) * 100
+	allowedPct := float64(stats.Allowed) / float64(total) * 100
+	deniedPct := float64(stats.Denied) / float64(total) * 100
+	loggedPct := float64(stats.Logged) / float64(total) * 100
 
-	log.Println("=== Warmor Statistics ===")
-	log.Printf("Total Events: %d", stats.TotalEvaluations)
-	log.Printf("Allowed: %d (%.1f%%)", stats.AllowedActions, allowedPct)
-	log.Printf("Denied: %d (%.1f%%)", stats.DeniedActions, deniedPct)
-	log.Printf("Logged: %d (%.1f%%)", stats.LoggedActions, loggedPct)
-	log.Printf("Average Duration: %v", stats.AverageDuration)
-	log.Printf("Min Duration: %v", stats.MinDuration)
-	log.Printf("Max Duration: %v", stats.MaxDuration)
-	log.Println("========================")
+	cacheHitRate := float64(0)
+	if stats.CacheHits+stats.CacheMisses > 0 {
+		cacheHitRate = float64(stats.CacheHits) / float64(stats.CacheHits+stats.CacheMisses) * 100
+	}
+
+	fmt.Println("\n=== Warmor Statistics ===")
+	fmt.Printf("Total Events: %d\n", total)
+	fmt.Printf("Allowed: %d (%.1f%%)\n", stats.Allowed, allowedPct)
+	fmt.Printf("Denied: %d (%.1f%%)\n", stats.Denied, deniedPct)
+	fmt.Printf("Logged: %d (%.1f%%)\n", stats.Logged, loggedPct)
+	fmt.Printf("Cache Hits: %d\n", stats.CacheHits)
+	fmt.Printf("Cache Misses: %d\n", stats.CacheMisses)
+	fmt.Printf("Cache Hit Rate: %.2f%%\n", cacheHitRate)
+	fmt.Printf("Cache Size: %d/%d\n", cacheStats.Size, cacheStats.MaxSize)
+	fmt.Println("========================")
 }
 
 // ReloadPolicy reloads the policy without stopping the enforcer
 func (e *Enforcer) ReloadPolicy() error {
-	log.Printf("Reloading policy from: %s", e.policyPath)
+	e.logger.LogInfo(fmt.Sprintf("Reloading policy from: %s", e.policyPath))
 
 	// Create new runtime
 	newRuntime, err := wasm.NewRuntime(e.ctx)
@@ -258,39 +281,55 @@ func (e *Enforcer) ReloadPolicy() error {
 		return fmt.Errorf("create new policy: %w", err)
 	}
 
-	// Atomic swap (this is safe because Go's pointer assignment is atomic)
-	oldPolicy := e.policy
+	// Create new evaluator
+	hostname, _ := os.Hostname()
+	newEvaluator := wasm.NewPolicyEvaluator(newPolicy, hostname)
+
+	// Atomic swap
+	oldEvaluator := e.evaluator
 	oldRuntime := e.wasmRuntime
 
-	e.policy = newPolicy
+	e.evaluator = newEvaluator
 	e.wasmRuntime = newRuntime
 
+	// Clear cache on policy reload
+	e.cache.Clear()
+
 	// Clean up old resources
-	if oldPolicy != nil {
-		oldPolicy.Close(e.ctx)
+	if oldEvaluator != nil {
+		oldEvaluator.Close(e.ctx)
 	}
 	if oldRuntime != nil {
 		oldRuntime.Close(e.ctx)
 	}
 
-	log.Println("✓ Policy reloaded successfully")
+	e.logger.LogInfo("✓ Policy reloaded successfully")
+	metrics.SetPolicyInfo(e.policyPath, "1.0.0")
 	return nil
 }
 
 // Stop stops the enforcer
 func (e *Enforcer) Stop() {
-	log.Println("Stopping enforcer...")
+	e.logger.LogInfo("Stopping enforcer...")
 	e.cancel()
 	e.wg.Wait()
-	log.Println("✓ Enforcer stopped")
+	e.logger.LogInfo("✓ Enforcer stopped")
 }
 
 // Close cleans up resources
 func (e *Enforcer) Close() error {
-	log.Println("Cleaning up resources...")
+	e.logger.LogShutdown()
 
-	if e.policy != nil {
-		e.policy.Close(e.ctx)
+	// Stop metrics server
+	if e.metricsServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		e.metricsServer.Stop(ctx)
+	}
+
+	// Clean up enforcer resources
+	if e.evaluator != nil {
+		e.evaluator.Close(e.ctx)
 	}
 	if e.wasmRuntime != nil {
 		e.wasmRuntime.Close(e.ctx)
@@ -299,20 +338,8 @@ func (e *Enforcer) Close() error {
 		e.ebpfLoader.Close()
 	}
 
-	log.Println("✓ Resources cleaned up")
+	e.logger.LogInfo("✓ Resources cleaned up")
 	return nil
-}
-
-// Stats represents enforcement statistics
-type Stats struct {
-	TotalEvaluations uint64
-	AllowedActions   uint64
-	DeniedActions    uint64
-	LoggedActions    uint64
-	TotalDuration    time.Duration
-	AverageDuration  time.Duration
-	MinDuration      time.Duration
-	MaxDuration      time.Duration
 }
 
 // Made with Bob
