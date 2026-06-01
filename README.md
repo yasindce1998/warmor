@@ -340,17 +340,64 @@ make clean        # Clean build artifacts
 ```
 warmor/
 ├── cmd/                    # Command-line tools
-│   ├── warmor-daemon/     # Main enforcer
-│   ├── test-ebpf/         # eBPF testing
-│   └── test-wasm/         # WASM testing
+│   ├── warmor-daemon/     # Main enforcer daemon
+│   ├── test-ebpf/         # eBPF testing tool
+│   └── test-wasm/         # WASM testing tool
 ├── internal/              # Internal packages
-│   ├── ebpf/             # eBPF loader
-│   ├── wasm/             # WASM runtime
-│   └── enforcer/         # Enforcement logic
-├── pkg/api/              # Public API
-├── policies/example/     # Example policy
-├── bpf/                  # eBPF C programs
-└── docs/                 # Documentation
+│   ├── platform/          # Platform implementations
+│   │   ├── linux.go       # Linux (eBPF) - Production
+│   │   ├── windows.go     # Windows (ETW/eBPF) - Beta
+│   │   ├── darwin.go      # macOS (ESF) - Beta
+│   │   ├── new_linux.go   # Linux platform factory
+│   │   ├── new_windows.go # Windows platform factory
+│   │   ├── new_darwin.go  # macOS platform factory
+│   │   ├── interface.go   # Platform interface
+│   │   ├── etw/           # Windows ETW/eBPF consumer
+│   │   └── esf/           # macOS ESF client
+│   ├── ebpf/              # Linux eBPF loader
+│   ├── wasm/              # WASM runtime (Wazero)
+│   ├── enforcer/          # Enforcement logic
+│   ├── cache/             # Decision caching (LRU)
+│   ├── logging/           # Structured logging (zerolog)
+│   ├── metrics/           # Prometheus metrics
+│   ├── patterns/          # Pattern matching (glob/regex)
+│   └── testing/           # Testing framework
+├── pkg/api/               # Public API types
+├── policies/              # WASM policies
+│   ├── example/           # Example policy
+│   ├── cross-platform/    # Cross-platform policy
+│   ├── advanced/          # Advanced policy
+│   └── multi/             # Multi-syscall policy
+├── bpf/                   # Linux eBPF C programs
+│   ├── execve_monitor.bpf.c
+│   ├── openat_monitor.bpf.c
+│   └── connect_monitor.bpf.c
+├── bpf-windows/           # Windows eBPF C programs
+│   ├── process_monitor.bpf.c
+│   ├── file_monitor.bpf.c
+│   ├── network_monitor.bpf.c
+│   └── Makefile
+├── macos/                 # macOS System Extension
+│   └── SystemExtension/
+│       ├── Info.plist
+│       └── warmor.entitlements
+├── scripts/               # Build and setup scripts
+├── docs/                  # Documentation
+│   ├── ARCHITECTURE.md    # System architecture
+│   ├── PRD.md             # Product requirements
+│   ├── PROJECT_COMPLETE.md # Project status
+│   ├── PLATFORM_LINUX.md  # Linux guide
+│   ├── PLATFORM_WINDOWS.md # Windows guide
+│   └── PLATFORM_MACOS.md  # macOS guide
+├── .gitignore             # Git ignore rules
+├── .bobignore             # Bob ignore rules
+├── BUILD.md               # Build instructions
+├── GETTING_STARTED.md     # Quick start guide
+├── README.md              # This file
+├── LICENSE                # MIT License
+├── Makefile               # Build automation
+├── go.mod                 # Go module definition
+└── go.sum                 # Go dependencies
 ```
 
 ---
