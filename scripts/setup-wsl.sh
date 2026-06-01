@@ -73,4 +73,4 @@ echo "  3. Build WASM policies: cd policies/example && cargo build --release --t
 echo "  4. Build warmor: go build -o warmor cmd/warmor/main.go"
 echo "  5. Run tests: go test ./... -v"
 
-# Made with Bob
+

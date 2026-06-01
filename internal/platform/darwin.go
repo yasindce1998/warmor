@@ -6,14 +6,15 @@ package platform
 import (
 	"context"
 	"fmt"
-	"time"
+	"log"
 
+	"github.com/yasindce1998/warmor/internal/platform/esf"
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
-// DarwinPlatform implements Platform for macOS
+// DarwinPlatform implements Platform for macOS using Endpoint Security Framework
 type DarwinPlatform struct {
-	// Future: Endpoint Security Framework client
+	esfClient *esf.Client
 	eventChan chan<- *api.Event
 	stopChan  chan struct{}
 }
@@ -30,73 +31,78 @@ func (p *DarwinPlatform) Name() string {
 }
 
 func (p *DarwinPlatform) Load(ctx context.Context) error {
-	// Future: Initialize Endpoint Security Framework
-	// Requires system extension entitlements
-	fmt.Println("macOS platform: Endpoint Security Framework support coming soon")
-	fmt.Println("For now, warmor will run in stub mode on macOS")
+	log.Println("macOS platform: Initializing Endpoint Security Framework")
+	log.Println("Note: macOS support is EXPERIMENTAL/BETA")
+	log.Println("Note: Requires Full Disk Access and System Extension approval")
+
+	// Create ESF client
+	client, err := esf.NewClient()
+	if err != nil {
+		return fmt.Errorf("create ESF client: %w", err)
+	}
+	p.esfClient = client
+
+	log.Println("✓ macOS platform loaded (ESF mode)")
 	return nil
 }
 
 func (p *DarwinPlatform) Start(ctx context.Context, eventChan chan<- *api.Event) error {
+	if p.esfClient == nil {
+		return fmt.Errorf("platform not loaded")
+	}
+
 	p.eventChan = eventChan
 
-	// Start event monitoring (stub for now)
-	go p.monitorEvents(ctx)
-
-	return nil
-}
-
-func (p *DarwinPlatform) monitorEvents(ctx context.Context) {
-	// Stub implementation
-	// Future: Integrate with Endpoint Security Framework
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-p.stopChan:
-			return
-		case <-ticker.C:
-			// Stub: Send a test event every 5 seconds
-			event := &api.Event{
-				Type:      api.EventTypeProcess,
-				PID:       1000,
-				UID:       501,
-				GID:       20,
-				Comm:      "stub",
-				Filename:  "/usr/bin/stub",
-				Timestamp: time.Now(),
-			}
-
-			select {
-			case p.eventChan <- event:
-			case <-ctx.Done():
-				return
-			case <-p.stopChan:
-				return
-			}
-		}
+	// Start ESF client
+	if err := p.esfClient.Start(ctx, eventChan); err != nil {
+		return fmt.Errorf("start ESF client: %w", err)
 	}
+
+	// Subscribe to process events
+	log.Println("Subscribing to process events...")
+	if err := p.esfClient.SubscribeToProcessEvents(); err != nil {
+		log.Printf("Warning: Failed to subscribe to process events: %v", err)
+	}
+
+	// Subscribe to file events
+	log.Println("Subscribing to file events...")
+	if err := p.esfClient.SubscribeToFileEvents(); err != nil {
+		log.Printf("Warning: Failed to subscribe to file events: %v", err)
+	}
+
+	// Subscribe to network events
+	log.Println("Subscribing to network events...")
+	if err := p.esfClient.SubscribeToNetworkEvents(); err != nil {
+		log.Printf("Warning: Failed to subscribe to network events: %v", err)
+	}
+
+	log.Println("✓ macOS platform started successfully")
+	log.Println("⚠️  Make sure to grant Full Disk Access in System Preferences")
+	return nil
 }
 
 func (p *DarwinPlatform) Stop() error {
 	close(p.stopChan)
+	if p.esfClient != nil {
+		return p.esfClient.Stop()
+	}
 	return nil
 }
 
 func (p *DarwinPlatform) Close() error {
-	// Future: Cleanup macOS resources
+	if p.esfClient != nil {
+		return p.esfClient.Stop()
+	}
 	return nil
 }
 
 func (p *DarwinPlatform) Capabilities() Capabilities {
+	// ESF provides full monitoring and enforcement
 	return Capabilities{
-		ProcessMonitoring: false, // Not yet implemented
-		FileMonitoring:    false, // Not yet implemented
-		NetworkMonitoring: false, // Not yet implemented
-		Enforcement:       false, // Not yet implemented
+		ProcessMonitoring: true,  // ESF process events
+		FileMonitoring:    true,  // ESF file events
+		NetworkMonitoring: true,  // ESF network events
+		Enforcement:       true,  // ESF AUTH events can block
 	}
 }
 

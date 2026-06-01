@@ -35,6 +35,7 @@ go.work.sum
 *.swo
 *~
 .DS_Store
+.bob/
 
 # Logs
 *.log
@@ -42,3 +43,4 @@ go.work.sum
 # Temporary files
 tmp/
 temp/
+

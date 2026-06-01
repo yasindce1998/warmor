@@ -6,22 +6,32 @@ package platform
 import (
 	"context"
 	"fmt"
-	"time"
+	"log"
 
+	"github.com/yasindce1998/warmor/internal/platform/etw"
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
-// WindowsPlatform implements Platform for Windows
+// Monitoring modes
+const (
+	ModeEBPF = "ebpf"
+	ModeETW  = "etw"
+)
+
+// WindowsPlatform implements Platform for Windows using ETW
+// Future: Add eBPF-for-Windows support with automatic fallback
 type WindowsPlatform struct {
-	// Future: eBPF-for-Windows handle or ETW session
-	eventChan chan<- *api.Event
-	stopChan  chan struct{}
+	etwConsumer *etw.Consumer
+	eventChan   chan<- *api.Event
+	stopChan    chan struct{}
+	mode        string // "etw" or "ebpf" (future)
 }
 
 // NewWindowsPlatform creates a new Windows platform
 func NewWindowsPlatform() (Platform, error) {
 	return &WindowsPlatform{
 		stopChan: make(chan struct{}),
+		mode:     "etw", // Default to ETW
 	}, nil
 }
 
@@ -30,74 +40,126 @@ func (p *WindowsPlatform) Name() string {
 }
 
 func (p *WindowsPlatform) Load(ctx context.Context) error {
-	// Future: Load eBPF-for-Windows driver or initialize ETW
-	// For Phase 4, we provide the foundation
-	fmt.Println("Windows platform: eBPF-for-Windows support coming soon")
-	fmt.Println("For now, warmor will run in stub mode on Windows")
+	log.Println("Windows platform: Initializing monitoring")
+	log.Println("Note: Windows support is EXPERIMENTAL/BETA")
+	
+	// Step 1: Try to detect and use eBPF-for-Windows
+	ebpfAvailable, err := etw.DetectEBPFForWindows()
+	if err != nil {
+		log.Printf("Warning: Failed to detect eBPF-for-Windows: %v", err)
+	}
+
+	if ebpfAvailable != nil && ebpfAvailable.Available {
+		log.Println("✓ eBPF-for-Windows detected!")
+		log.Printf("  Service: %v", ebpfAvailable.ServiceRunning)
+		log.Printf("  Driver: %v", ebpfAvailable.DriverLoaded)
+		log.Printf("  Version: %s", ebpfAvailable.Version)
+		
+		// Try to initialize eBPF-for-Windows
+		if err := p.initializeEBPF(ctx); err != nil {
+			log.Printf("⚠ Failed to initialize eBPF-for-Windows: %v", err)
+			log.Println("⚠ Falling back to ETW...")
+			p.mode = ModeETW
+		} else {
+			log.Println("✓ Using eBPF-for-Windows mode")
+			p.mode = ModeEBPF
+			return nil
+		}
+	} else {
+		log.Println("ℹ eBPF-for-Windows not available")
+		if ebpfAvailable != nil && ebpfAvailable.ErrorMessage != "" {
+			log.Printf("  Reason: %s", ebpfAvailable.ErrorMessage)
+		}
+		log.Println("ℹ Using ETW mode")
+		p.mode = ModeETW
+	}
+
+	// Step 2: Fall back to ETW
+	log.Println("Initializing ETW consumer...")
+	consumer, err := etw.NewConsumer("WarmorETWSession")
+	if err != nil {
+		return fmt.Errorf("create ETW consumer: %w", err)
+	}
+	p.etwConsumer = consumer
+
+	log.Printf("✓ Windows platform loaded in %s mode", p.mode)
 	return nil
 }
 
 func (p *WindowsPlatform) Start(ctx context.Context, eventChan chan<- *api.Event) error {
+	if p.etwConsumer == nil {
+		return fmt.Errorf("platform not loaded")
+	}
+
 	p.eventChan = eventChan
 
-	// Start event monitoring (stub for now)
-	go p.monitorEvents(ctx)
-
-	return nil
-}
-
-func (p *WindowsPlatform) monitorEvents(ctx context.Context) {
-	// Stub implementation
-	// Future: Integrate with eBPF-for-Windows or ETW
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-p.stopChan:
-			return
-		case <-ticker.C:
-			// Stub: Send a test event every 5 seconds
-			event := &api.Event{
-				Type:      api.EventTypeProcess,
-				PID:       1000,
-				UID:       1000,
-				GID:       1000,
-				Comm:      "stub.exe",
-				Filename:  "C:\\Windows\\System32\\stub.exe",
-				Timestamp: time.Now(),
-			}
-
-			select {
-			case p.eventChan <- event:
-			case <-ctx.Done():
-				return
-			case <-p.stopChan:
-				return
-			}
-		}
+	// Start ETW consumer
+	if err := p.etwConsumer.Start(ctx, eventChan); err != nil {
+		return fmt.Errorf("start ETW consumer: %w", err)
 	}
+
+	// Enable monitoring for different event types
+	log.Println("Enabling process monitoring...")
+	if err := p.etwConsumer.EnableProcessMonitoring(); err != nil {
+		log.Printf("Warning: Failed to enable process monitoring: %v", err)
+	}
+
+	log.Println("Enabling file monitoring...")
+	if err := p.etwConsumer.EnableFileMonitoring(); err != nil {
+		log.Printf("Warning: Failed to enable file monitoring: %v", err)
+	}
+
+	log.Println("Enabling network monitoring...")
+	if err := p.etwConsumer.EnableNetworkMonitoring(); err != nil {
+		log.Printf("Warning: Failed to enable network monitoring: %v", err)
+	}
+
+	log.Println("Windows platform started successfully")
+	return nil
 }
 
 func (p *WindowsPlatform) Stop() error {
 	close(p.stopChan)
+	if p.etwConsumer != nil {
+		return p.etwConsumer.Stop()
+	}
 	return nil
 }
 
 func (p *WindowsPlatform) Close() error {
-	// Future: Cleanup Windows resources
+	if p.etwConsumer != nil {
+		return p.etwConsumer.Stop()
+	}
 	return nil
 }
 
 func (p *WindowsPlatform) Capabilities() Capabilities {
+	// ETW provides monitoring but limited enforcement
 	return Capabilities{
-		ProcessMonitoring: false, // Not yet implemented
-		FileMonitoring:    false, // Not yet implemented
-		NetworkMonitoring: false, // Not yet implemented
-		Enforcement:       false, // Not yet implemented
+		ProcessMonitoring: true,  // ETW process events
+		FileMonitoring:    true,  // ETW file events (limited)
+		NetworkMonitoring: true,  // ETW network events
+		Enforcement:       false, // ETW is monitoring only, no blocking
 	}
+}
+
+// initializeEBPF initializes eBPF-for-Windows monitoring
+func (p *WindowsPlatform) initializeEBPF(ctx context.Context) error {
+	// TODO: Implement eBPF-for-Windows initialization
+	// This will be implemented in a future phase when eBPF-for-Windows is production-ready
+	// 
+	// Steps:
+	// 1. Load eBPF programs (similar to Linux implementation)
+	// 2. Attach to hook points
+	// 3. Set up event channels
+	// 4. Start event processing
+	
+	return fmt.Errorf("eBPF-for-Windows initialization not yet implemented")
+}
+
+// GetMode returns the current monitoring mode
+func (p *WindowsPlatform) GetMode() string {
+	return p.mode
 }
 
 // Made with Bob

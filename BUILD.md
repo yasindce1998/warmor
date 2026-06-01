@@ -4,7 +4,11 @@ This guide provides detailed instructions for building warmor from source.
 
 ## Prerequisites
 
-### Required Tools
+### Platform-Specific Requirements
+
+#### Linux (Production) ✅
+
+**Required Tools:**
 
 1. **Go 1.26.2+**
    ```bash
@@ -58,13 +62,76 @@ This guide provides detailed instructions for building warmor from source.
        gcc
    ```
 
-### System Requirements
-
+**System Requirements:**
 - **OS:** Linux with kernel 5.10+ (for eBPF support)
 - **Architecture:** x86_64 or ARM64
 - **Privileges:** Root access required for running (eBPF requirement)
 
+#### Windows (Beta/Experimental) 🚧
+
+**Required Tools:**
+
+1. **Go 1.21+**
+   ```powershell
+   go version
+   # Should output: go version go1.21 or higher
+   ```
+
+2. **Rust 1.70+ with WASM target**
+   ```powershell
+   rustc --version
+   cargo --version
+   
+   # Add WASM target
+   rustup target add wasm32-unknown-unknown
+   ```
+
+3. **Visual Studio Build Tools** (optional, for CGO)
+   ```powershell
+   winget install Microsoft.VisualStudio.2022.BuildTools
+   ```
+
+**System Requirements:**
+- **OS:** Windows 10 version 1809+ or Windows 11
+- **Architecture:** x64 only (ARM64 planned)
+- **Privileges:** Administrator access required (for ETW)
+
+**⚠️ Important:** Windows support is EXPERIMENTAL/BETA. ETW provides monitoring only (no enforcement).
+
+#### macOS (Beta/Experimental) 🚧
+
+**Required Tools:**
+
+1. **Go 1.21+**
+   ```bash
+   go version
+   ```
+
+2. **Rust 1.70+ with WASM target**
+   ```bash
+   rustc --version
+   cargo --version
+   
+   # Add WASM target
+   rustup target add wasm32-unknown-unknown
+   ```
+
+3. **Xcode Command Line Tools**
+   ```bash
+   xcode-select --install
+   ```
+
+**System Requirements:**
+- **OS:** macOS 10.15+ (Catalina or later)
+- **Architecture:** x86_64 or ARM64 (Apple Silicon)
+- **Privileges:** Root access required (for ESF)
+- **Permissions:** System Extension approval + Full Disk Access
+
+**⚠️ Important:** macOS support is EXPERIMENTAL/BETA. ESF provides monitoring and enforcement (AUTH events).
+
 ## Quick Build
+
+### Linux
 
 ```bash
 # Clone repository
@@ -83,6 +150,133 @@ This will:
 2. Generate Go bindings
 3. Build the WASM policy
 4. Build the warmor daemon
+
+### Windows (Beta)
+
+```powershell
+# Clone repository
+git clone https://github.com/yasindce1998/warmor.git
+cd warmor
+
+# Build WASM policy
+cd policies\cross-platform
+cargo build --release --target wasm32-unknown-unknown
+cd ..\..
+
+# Build warmor daemon
+$env:GOOS="windows"
+$env:GOARCH="amd64"
+$env:CGO_ENABLED="0"
+go build -o warmor.exe cmd\warmor-daemon\main.go
+
+# Verify
+.\warmor.exe --version
+```
+
+**Note:** Windows build supports both ETW and eBPF-for-Windows modes.
+
+#### Build eBPF Programs for Windows (Optional)
+
+If you have eBPF-for-Windows installed and want to use eBPF mode:
+
+```powershell
+# Install LLVM/Clang
+winget install LLVM.LLVM
+
+# Build eBPF programs
+cd bpf-windows
+make all
+make install
+cd ..
+
+# Verify
+ls internal\platform\etw\programs\*.bpf.o
+```
+
+This will compile:
+- `process_monitor.bpf.o` - Process monitoring
+- `file_monitor.bpf.o` - File monitoring  
+- `network_monitor.bpf.o` - Network monitoring
+
+**Note:** eBPF programs are optional. warmor will automatically fall back to ETW if eBPF-for-Windows is not available.
+
+### macOS (Beta/Experimental)
+
+```bash
+# Clone repository
+git clone https://github.com/yasindce1998/warmor.git
+cd warmor
+
+# Install Xcode Command Line Tools (if not already installed)
+xcode-select --install
+
+# Build WASM policy
+cd policies/cross-platform
+cargo build --release --target wasm32-unknown-unknown
+cd ../..
+
+# Build warmor daemon with ESF support
+export GOOS=darwin
+export GOARCH=amd64  # or arm64 for Apple Silicon
+export CGO_ENABLED=1
+
+go build -o warmor-daemon cmd/warmor-daemon/main.go
+
+# Verify
+./warmor-daemon --version
+```
+
+**Note:** macOS build uses Endpoint Security Framework (ESF) for monitoring and enforcement.
+
+#### Code Signing (Required for Distribution)
+
+```bash
+# Sign the binary
+codesign --sign "Developer ID Application: Your Name" \
+         --entitlements macos/SystemExtension/warmor.entitlements \
+         --options runtime \
+         warmor-daemon
+
+# Verify signature
+codesign -dv --verbose=4 warmor-daemon
+```
+
+#### Create System Extension Bundle
+
+```bash
+# Create bundle structure
+mkdir -p warmor.app/Contents/MacOS
+mkdir -p warmor.app/Contents/Resources
+
+# Copy binary
+cp warmor-daemon warmor.app/Contents/MacOS/
+
+# Copy Info.plist
+cp macos/SystemExtension/Info.plist warmor.app/Contents/
+
+# Sign the bundle
+codesign --sign "Developer ID Application: Your Name" \
+         --entitlements macos/SystemExtension/warmor.entitlements \
+         --options runtime \
+         warmor.app
+```
+
+#### Running on macOS
+
+```bash
+# Run as root (REQUIRED for ESF)
+sudo ./warmor-daemon
+
+# Run with custom policy
+sudo ./warmor-daemon --policy policies/cross-platform/policy.wasm
+```
+
+**First Run Setup:**
+1. Grant Full Disk Access: System Preferences → Security & Privacy → Privacy → Full Disk Access
+2. Approve System Extension when prompted
+3. Verify permissions: `sudo ./warmor-daemon --check-permissions`
+
+**Note:** See [macOS Platform Guide](docs/PLATFORM_MACOS.md) for detailed setup instructions.
 
 ## Step-by-Step Build
 
@@ -204,7 +398,9 @@ ls -lh warmor-daemon
 
 ## Running Tests
 
-### Test eBPF Event Capture
+### Linux Tests
+
+#### Test eBPF Event Capture
 
 ```bash
 sudo ./test-ebpf
@@ -251,7 +447,7 @@ Average Evaluation Time: 49µs
 ✓ All tests passed!
 ```
 
-### Run Full Enforcer
+#### Run Full Enforcer (Linux)
 
 ```bash
 sudo ./warmor-daemon
@@ -263,9 +459,10 @@ Expected output:
 ║║║╠═╣╠╦╝║║║║ ║╠╦╝
 ╚╩╝╩ ╩╩╚═╩ ╩╚═╝╩╚═
 WASM-Powered Security Enforcer
-Version: Phase 1 (PoC)
+Version: 1.1.0-beta
 
 Policy: policies/example/policy.wasm
+Platform: linux (eBPF)
 Stats Interval: 30s
 Log Level: info
 
@@ -286,6 +483,83 @@ Enforcer started, processing events...
 
 [DENY] PID=1234 UID=0 COMM=sudo FILE=/bin/bash (eval_time=45µs)
 [LOG] PID=1235 UID=1000 COMM=bash FILE=/usr/bin/python3 (eval_time=52µs)
+```
+
+### Windows Tests (Beta)
+
+#### Run warmor on Windows
+
+```powershell
+# Run as Administrator (REQUIRED)
+.\warmor.exe
+
+# Or with custom policy
+.\warmor.exe --policy policies\cross-platform\policy.wasm
+
+# With debug logging
+.\warmor.exe --log-level debug
+```
+
+Expected output:
+```
+╦ ╦╔═╗╦═╗╔╦╗╔═╗╦═╗
+║║║╠═╣╠╦╝║║║║ ║╠╦╝
+╚╩╝╩ ╩╩╚═╩ ╩╚═╝╩╚═
+WASM-Powered Security Enforcer
+Version: 1.1.0-beta (EXPERIMENTAL)
+
+Policy: policies\cross-platform\policy.wasm
+Platform: windows (ETW - Beta)
+Stats Interval: 30s
+Log Level: info
+
+⚠️  WARNING: Windows support is EXPERIMENTAL/BETA
+⚠️  Monitoring only (no enforcement)
+
+Initializing warmor enforcer...
+Windows platform: Initializing ETW consumer
+Note: Windows support is EXPERIMENTAL/BETA
+Enabling process monitoring...
+Enabling file monitoring...
+Enabling network monitoring...
+Windows platform started successfully
+Creating WASM runtime...
+✓ WASM runtime created
+Loading policy from: policies\cross-platform\policy.wasm
+✓ Policy loaded
+
+✓ warmor enforcer initialized successfully
+
+Enforcer started, processing events...
+🚀 warmor is running. Press Ctrl+C to stop.
+
+[LOG] PID=1234 UID=1000 COMM=notepad.exe FILE=C:\Windows\System32\notepad.exe
+[LOG] PID=1235 UID=1000 COMM=powershell.exe FILE=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+```
+
+**Troubleshooting Windows:**
+- **"Access Denied"** - Run PowerShell as Administrator
+- **"ETW session already exists"** - Stop existing session: `logman stop "WarmorETWSession" -ets`
+- **No events appearing** - Check Event Viewer for ETW errors
+
+### macOS Tests (Stub)
+
+```bash
+sudo ./warmor-darwin
+```
+
+Expected output:
+```
+╦ ╦╔═╗╦═╗╔╦╗╔═╗╦═╗
+║║║╠═╣╠╦╝║║║║ ║╠╦╝
+╚╩╝╩ ╩╩╚═╩ ╩╚═╝╩╚═
+WASM-Powered Security Enforcer
+Version: 1.1.0-beta (STUB)
+
+⚠️  WARNING: macOS support is STUB ONLY
+⚠️  No actual monitoring implemented
+
+Platform: darwin (stub)
 ```
 
 ## Build Options
@@ -312,18 +586,33 @@ Note: Static builds may not work with eBPF due to CGO requirements in cilium/ebp
 
 ## Cross-Compilation
 
-warmor currently only supports Linux due to eBPF requirements. Cross-compilation for different architectures:
+### Linux Cross-Compilation
 
-### For ARM64
+For different architectures:
 
 ```bash
+# ARM64
 GOARCH=arm64 go build -o warmor-daemon-arm64 ./cmd/warmor-daemon
+
+# x86_64
+GOARCH=amd64 go build -o warmor-daemon-amd64 ./cmd/warmor-daemon
 ```
 
-### For x86_64
+### Windows Cross-Compilation (from Linux)
 
 ```bash
-GOARCH=amd64 go build -o warmor-daemon-amd64 ./cmd/warmor-daemon
+# Build for Windows from Linux
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o warmor.exe cmd/warmor-daemon/main.go
+```
+
+### macOS Cross-Compilation (from Linux)
+
+```bash
+# Build for macOS from Linux
+GOOS=darwin GOARCH=amd64 go build -o warmor-darwin cmd/warmor-daemon/main.go
+
+# For Apple Silicon
+GOOS=darwin GOARCH=arm64 go build -o warmor-darwin-arm64 cmd/warmor-daemon/main.go
 ```
 
 ## Troubleshooting
@@ -391,5 +680,15 @@ After successful build:
 
 ---
 
-**Last Updated:** 2026-04-29  
-**Version:** Phase 1 (PoC)
+## Platform-Specific Documentation
+
+For detailed platform-specific information:
+
+- **[Linux Platform Guide](docs/PLATFORM_LINUX.md)** - Production (eBPF)
+- **[Windows Platform Guide](docs/PLATFORM_WINDOWS.md)** - Beta/Experimental (ETW + eBPF-for-Windows)
+- **[macOS Platform Guide](docs/PLATFORM_MACOS.md)** - Beta/Experimental (ESF)
+
+---
+
+**Last Updated:** 2026-06-01  
+**Version:** 1.1.0-beta (Linux Production, Windows Beta)

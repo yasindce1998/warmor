@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    
+    <key>CFBundleDisplayName</key>
+    <string>warmor Security Extension</string>
+    
+    <key>CFBundleExecutable</key>
+    <string>warmor-daemon</string>
+    
+    <key>CFBundleIdentifier</key>
+    <string>com.warmor.security.extension</string>
+    
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    
+    <key>CFBundleName</key>
+    <string>warmor</string>
+    
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    
+    <key>CFBundleShortVersionString</key>
+    <string>1.1.0</string>
+    
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    
+    <key>LSMinimumSystemVersion</key>
+    <string>10.15</string>
+    
+    <!-- System Extension Type -->
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.system_extension.endpoint_security</string>
+        
+        <key>NSExtensionPrincipalClass</key>
+        <string>WarmorExtension</string>
+    </dict>
+    
+    <!-- Endpoint Security Entitlement -->
+    <key>com.apple.developer.endpoint-security.client</key>
+    <true/>
+    
+    <!-- System Extension Entitlement -->
+    <key>com.apple.developer.system-extension.install</key>
+    <true/>
+    
+    <!-- Privacy - Full Disk Access -->
+    <key>NSSystemExtensionUsageDescription</key>
+    <string>warmor requires system extension access to monitor and enforce security policies at the kernel level.</string>
+    
+    <!-- Hardened Runtime -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <false/>
+    
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <false/>
+    
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <false/>
+</dict>
+</plist>

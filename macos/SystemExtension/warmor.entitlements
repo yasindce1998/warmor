@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Endpoint Security Framework -->
+    <key>com.apple.developer.endpoint-security.client</key>
+    <true/>
+    
+    <!-- System Extension -->
+    <key>com.apple.developer.system-extension.install</key>
+    <true/>
+    
+    <!-- App Sandbox (disabled for system extension) -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    
+    <!-- Network Client (for network monitoring) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- Network Server (for metrics endpoint) -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+    
+    <!-- File Access (for policy loading) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- Hardened Runtime -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <false/>
+    
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <false/>
+    
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <false/>
+    
+    <key>com.apple.security.cs.disable-executable-page-protection</key>
+    <false/>
+    
+    <!-- Debugging (remove for production) -->
+    <key>com.apple.security.get-task-allow</key>
+    <true/>
+</dict>
+</plist>

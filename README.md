@@ -8,6 +8,9 @@
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Phase%203%20Complete-brightgreen)](docs/PHASE3_COMPLETE.md)
+[![Windows](https://img.shields.io/badge/Windows-Beta%2FETW%2BeBPF-yellow)](docs/PLATFORM_WINDOWS.md)
+[![Linux](https://img.shields.io/badge/Linux-Production-brightgreen)](docs/PLATFORM_LINUX.md)
+[![macOS](https://img.shields.io/badge/macOS-Beta%2FESF-yellow)](docs/PLATFORM_MACOS.md)
 
 > **warmor** (WebAssembly + Armor) solves the "Policy Portability Problem" by using WASM as the policy execution engine and platform-specific hooks as the enforcement mechanism.
 
@@ -39,6 +42,9 @@ Application → Platform Hook (eBPF/ESF/KMD) → warmor Daemon → WASM Policy �
 
 ### Core Capabilities
 - ✅ **Cross-Platform:** Same policy works on Linux, Windows, and macOS
+  - **Linux:** ✅ Production (eBPF)
+  - **Windows:** 🚧 Beta/Experimental (ETW + eBPF-for-Windows)
+  - **macOS:** 🚧 Beta/Experimental (ESF)
 - ✅ **Safe:** WASM sandbox prevents policy bugs from crashing the system
 - ✅ **Portable:** Write policies in Rust, Go, or C and compile to WASM
 - ✅ **Hot-Reload:** Update policies without restarting the enforcer
@@ -65,10 +71,30 @@ Application → Platform Hook (eBPF/ESF/KMD) → warmor Daemon → WASM Policy �
 
 ### Prerequisites
 
+**Linux (Production):**
 - **Go 1.26.2+**
 - **Rust 1.70+** (for building policies)
 - **Linux Kernel 5.10+** (for eBPF support)
 - **Clang/LLVM** (for compiling eBPF programs)
+
+**Windows (Beta/Experimental):**
+- **Go 1.21+**
+- **Rust 1.70+** (for building policies)
+- **Windows 10 1809+** or **Windows 11**
+- **Administrator privileges** (for ETW/eBPF)
+- **Optional:** eBPF-for-Windows (for eBPF mode with enforcement)
+- **Optional:** LLVM/Clang (for compiling eBPF programs)
+- See [Windows Platform Guide](docs/PLATFORM_WINDOWS.md) for details
+
+**macOS (Beta/Experimental):**
+- **Go 1.21+**
+- **Rust 1.70+** (for building policies)
+- **macOS 10.15+** (Catalina or later)
+- **Xcode Command Line Tools**
+- **Root privileges** (for ESF)
+- **System Extension approval** (required)
+- **Full Disk Access** (required)
+- See [macOS Platform Guide](docs/PLATFORM_MACOS.md) for details
 
 ### Installation
 
@@ -193,10 +219,16 @@ Cache Size: 245/10000
 
 ## 📖 Documentation
 
+### General
 - **[Getting Started](GETTING_STARTED.md)** - Build and run warmor
 - **[Architecture](docs/architecture.md)** - System design and components
 - **[PRD](docs/PRD.md)** - Complete product requirements
 - **[Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md)** - Detailed Phase 1 guide
+
+### Platform-Specific
+- **[Linux Platform Guide](docs/PLATFORM_LINUX.md)** - ✅ Production (eBPF)
+- **[Windows Platform Guide](docs/PLATFORM_WINDOWS.md)** - 🚧 Beta/Experimental (ETW + eBPF-for-Windows)
+- **[macOS Platform Guide](docs/PLATFORM_MACOS.md)** - 🚧 Beta/Experimental (ESF)
 
 ---
 
@@ -254,24 +286,39 @@ Cache Size: 245/10000
 
 ## 📊 Current Status
 
-**Phase 1: Linux PoC** (In Progress)
+**Phases 1-6: Complete** ✅
 
-- [x] Project structure and documentation
-- [x] eBPF program for execve monitoring
-- [x] WASM runtime integration (Wazero)
-- [x] Example Rust policy
-- [ ] Full eBPF + WASM integration
-- [ ] Hot-reload capability
-- [ ] Testing and validation
+- [x] Phase 1: Linux PoC (eBPF + WASM)
+- [x] Phase 2: Enforcement & Decision Making
+- [x] Phase 3: Multi-Syscall Support
+- [x] Phase 4: Cross-Platform Foundation
+- [x] Phase 5: Testing & Validation
+- [x] Phase 6: Documentation & Deployment
+
+**Phase 7: Platform Expansion** (In Progress)
+
+- [x] **Linux:** ✅ Production Ready (eBPF)
+  - Process, file, network monitoring
+  - Full eBPF integration
+  - Comprehensive testing
+- [x] **Windows:** 🚧 Beta/Experimental (ETW + eBPF-for-Windows)
+  - ETW-based monitoring (stable fallback)
+  - eBPF-for-Windows support (experimental)
+  - Process, file, network events
+  - Automatic fallback mechanism
+  - See [Windows Guide](docs/PLATFORM_WINDOWS.md)
+- [x] **macOS:** 🚧 Beta/Experimental (ESF)
+  - ESF-based monitoring
+  - Process, file, network events
+  - ✅ Enforcement capable (AUTH events)
+  - Requires System Extension approval
+  - See [macOS Guide](docs/PLATFORM_MACOS.md)
 
 **Next Phases:**
-- Phase 2: Observability (Prometheus, Grafana)
-- Phase 3: Kubernetes deployment
-- Phase 4: Windows and macOS support
-- Phase 5: Production features
-- Phase 6: Complete documentation
+- Phase 7.2: eBPF-for-Windows integration
+- Phase 8: Enterprise features (RBAC, Web UI, SIEM)
 
-See [IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) for details.
+See [PROJECT_COMPLETE.md](docs/PROJECT_COMPLETE.md) for full status.
 
 ---
 
@@ -345,5 +392,5 @@ warmor is licensed under the [MIT License](LICENSE).
 
 **Made with ❤️ by the warmor team**
 
-**Version:** Phase 1 (PoC)  
-**Last Updated:** 2026-04-29
+**Version:** 1.1.0-beta (Linux Production, Windows Beta)  
+**Last Updated:** 2026-06-01
