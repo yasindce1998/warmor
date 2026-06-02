@@ -77,13 +77,13 @@ This guide provides detailed instructions for building warmor from source.
    # Should output: go version go1.21 or higher
    ```
 
-2. **Rust 1.70+ with WASM target**
+2. **Rust 1.70+ with WASI target**
    ```powershell
    rustc --version
    cargo --version
    
-   # Add WASM target
-   rustup target add wasm32-unknown-unknown
+   # Add WASI target
+   rustup target add wasm32-wasi
    ```
 
 3. **Visual Studio Build Tools** (optional, for CGO)
@@ -107,13 +107,13 @@ This guide provides detailed instructions for building warmor from source.
    go version
    ```
 
-2. **Rust 1.70+ with WASM target**
+2. **Rust 1.70+ with WASI target**
    ```bash
    rustc --version
    cargo --version
    
-   # Add WASM target
-   rustup target add wasm32-unknown-unknown
+   # Add WASI target
+   rustup target add wasm32-wasi
    ```
 
 3. **Xcode Command Line Tools**
@@ -159,8 +159,8 @@ git clone https://github.com/yasindce1998/warmor.git
 cd warmor
 
 # Build WASM policy
-cd policies\cross-platform
-cargo build --release --target wasm32-unknown-unknown
+cd policies\example
+cargo build --release --target wasm32-wasi
 cd ..\..
 
 # Build warmor daemon
@@ -211,8 +211,8 @@ cd warmor
 xcode-select --install
 
 # Build WASM policy
-cd policies/cross-platform
-cargo build --release --target wasm32-unknown-unknown
+cd policies/example
+cargo build --release --target wasm32-wasi
 cd ../..
 
 # Build warmor daemon with ESF support
@@ -268,7 +268,7 @@ codesign --sign "Developer ID Application: Your Name" \
 sudo ./warmor-daemon
 
 # Run with custom policy
-sudo ./warmor-daemon --policy policies/cross-platform/policy.wasm
+sudo ./warmor-daemon -policy policies/example/policy.wasm
 ```
 
 **First Run Setup:**

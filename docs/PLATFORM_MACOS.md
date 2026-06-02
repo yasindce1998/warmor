@@ -131,7 +131,7 @@ cargo --version
 ### 1. Build WASM Policy
 ```bash
 cd policies/cross-platform
-cargo build --release --target wasm32-unknown-unknown
+cargo build --release --target wasm32-wasi
 cd ../..
 ```
 
@@ -188,13 +188,16 @@ codesign --sign "Developer ID Application: Your Name" \
 sudo ./warmor-daemon
 
 # Run with custom policy
-sudo ./warmor-daemon --policy policies/cross-platform/policy.wasm
+sudo ./warmor-daemon -policy policies/cross-platform/policy.wasm
 
 # Run with verbose logging
-sudo ./warmor-daemon --log-level debug
+sudo ./warmor-daemon -log-level debug
 
 # Run with custom metrics port
-sudo ./warmor-daemon --metrics-port 9091
+sudo ./warmor-daemon -metrics-port 9091
+
+# Combine multiple options
+sudo ./warmor-daemon -policy ./policy.wasm -log-level debug -metrics-port 9091 -stats-interval 1m
 ```
 
 ### Command-Line Options
@@ -202,14 +205,14 @@ sudo ./warmor-daemon --metrics-port 9091
 Usage: warmor-daemon [options]
 
 Options:
-  --policy string
-        Path to WASM policy file (default: policies/cross-platform/policy.wasm)
-  --log-level string
+  -policy string
+        Path to WASM policy file (default: policies/example/policy.wasm)
+  -log-level string
         Log level: debug, info, warn, error (default: info)
-  --metrics-port int
+  -stats-interval duration
+        Statistics reporting interval (default: 30s)
+  -metrics-port int
         Prometheus metrics port (default: 9090)
-  --help
-        Show this help message
 ```
 
 ### First Run Setup

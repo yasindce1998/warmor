@@ -133,7 +133,7 @@ cargo --version
 ### 1. Build WASM Policy
 ```powershell
 cd policies\cross-platform
-cargo build --release --target wasm32-unknown-unknown
+cargo build --release --target wasm32-wasi
 cd ..\..
 ```
 
@@ -164,13 +164,16 @@ go build -gcflags="all=-N -l" -o warmor-debug.exe cmd\warmor\main.go
 .\warmor.exe
 
 # Run with custom policy
-.\warmor.exe --policy C:\path\to\policy.wasm
+.\warmor.exe -policy C:\path\to\policy.wasm
 
 # Run with verbose logging
-.\warmor.exe --log-level debug
+.\warmor.exe -log-level debug
 
 # Run with custom metrics port
-.\warmor.exe --metrics-port 9091
+.\warmor.exe -metrics-port 9091
+
+# Combine multiple options
+.\warmor.exe -policy C:\path\to\policy.wasm -log-level debug -metrics-port 9091 -stats-interval 1m
 ```
 
 ### Command-Line Options
@@ -178,14 +181,14 @@ go build -gcflags="all=-N -l" -o warmor-debug.exe cmd\warmor\main.go
 Usage: warmor.exe [options]
 
 Options:
-  --policy string
-        Path to WASM policy file (default: policies/cross-platform/policy.wasm)
-  --log-level string
+  -policy string
+        Path to WASM policy file (default: policies/example/policy.wasm)
+  -log-level string
         Log level: debug, info, warn, error (default: info)
-  --metrics-port int
+  -stats-interval duration
+        Statistics reporting interval (default: 30s)
+  -metrics-port int
         Prometheus metrics port (default: 9090)
-  --help
-        Show this help message
 ```
 
 ### Windows Service (Future)

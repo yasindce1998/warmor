@@ -220,8 +220,8 @@ sudo ./warmor-daemon
 git clone https://github.com/yasindce1998/warmor.git
 cd warmor
 # Build WASM policy
-cd policies\cross-platform
-cargo build --release --target wasm32-unknown-unknown
+cd policies\example
+cargo build --release --target wasm32-wasi
 cd ..\..
 # Build daemon
 go build -o warmor.exe cmd\warmor-daemon\main.go
@@ -234,8 +234,8 @@ go build -o warmor.exe cmd\warmor-daemon\main.go
 git clone https://github.com/yasindce1998/warmor.git
 cd warmor
 # Build WASM policy
-cd policies/cross-platform
-cargo build --release --target wasm32-unknown-unknown
+cd policies/example
+cargo build --release --target wasm32-wasi
 cd ../..
 # Build daemon
 CGO_ENABLED=1 go build -o warmor-daemon cmd/warmor-daemon/main.go

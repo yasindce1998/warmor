@@ -31,8 +31,14 @@ type Enforcer struct {
 }
 
 // New creates a new enforcer instance with Phase 2 features
-func New(ctx context.Context, policyPath string) (*Enforcer, error) {
+func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer, error) {
 	hostname, _ := os.Hostname()
+
+	// Default metrics port
+	port := 9090
+	if len(metricsPort) > 0 {
+		port = metricsPort[0]
+	}
 
 	// Initialize logger
 	logger := logging.NewLogger("info")
@@ -85,9 +91,9 @@ func New(ctx context.Context, policyPath string) (*Enforcer, error) {
 	actionHandler := NewActionHandler()
 
 	// Initialize metrics server
-	metricsServer := metrics.NewServer(9090)
+	metricsServer := metrics.NewServer(port)
 	metrics.SetPolicyInfo(policyPath, "1.0.0")
-	logger.LogInfo("✓ Metrics server initialized on :9090")
+	logger.LogInfo(fmt.Sprintf("✓ Metrics server initialized on :%d", port))
 
 	ctx, cancel := context.WithCancel(ctx)
 

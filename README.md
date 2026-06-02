@@ -222,8 +222,8 @@ Cache Size: 245/10000
 ### General
 - **[Getting Started](GETTING_STARTED.md)** - Build and run warmor
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and components
+- **[Project Overview](docs/OVERVIEW.md)** - Current status and roadmap
 - **[PRD](docs/PRD.md)** - Complete product requirements
-- **[Implementation Roadmap](docs/IMPLEMENTATION_ROADMAP.md)** - Detailed Phase 1 guide
 
 ### Platform-Specific
 - **[Linux Platform Guide](docs/PLATFORM_LINUX.md)** - ✅ Production (eBPF)

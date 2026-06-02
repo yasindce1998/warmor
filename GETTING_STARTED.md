@@ -1,6 +1,6 @@
 # Getting Started with warmor
 
-This guide will help you build and run warmor Phase 1 - the Linux PoC with eBPF + WASM integration.
+This guide will help you build and run warmor - a cross-platform WASM-powered security enforcer supporting Linux, Windows, and macOS.
 
 ## Prerequisites
 
@@ -111,6 +111,12 @@ sudo ./warmor-daemon -policy /path/to/policy.wasm
 
 # Enable debug logging
 sudo ./warmor-daemon -log-level debug
+
+# Use custom metrics port
+sudo ./warmor-daemon -metrics-port 9091
+
+# Combine multiple options
+sudo ./warmor-daemon -policy ./policy.wasm -log-level debug -metrics-port 9091 -stats-interval 1m
 ```
 
 ### Command-Line Options
@@ -119,6 +125,8 @@ sudo ./warmor-daemon -log-level debug
 |------|---------|-------------|
 | `-policy` | `policies/example/policy.wasm` | Path to WASM policy file |
 | `-log-level` | `info` | Log level: debug, info, warn, error |
+| `-stats-interval` | `30s` | Statistics reporting interval |
+| `-metrics-port` | `9090` | Prometheus metrics server port |
 
 ### Expected Output
 
@@ -249,17 +257,17 @@ pub extern "C" fn malloc(size: usize) -> *mut u8 {
 
 ### High CPU usage
 
-This is expected in Phase 1 as we're processing every execve syscall. Future phases will add:
-- Decision caching
-- Event filtering
-- Performance optimizations
+This is typically addressed by the decision caching and event filtering implemented in Phase 3. If you still experience high CPU usage:
+- Review your policy logic for inefficiencies
+- Enable debug logging: `sudo ./warmor-daemon -log-level debug`
+- Check metrics: `curl http://localhost:9090/metrics`
 
 ## Next Steps
 
 1. **Experiment with policies** - Modify `policies/example/src/lib.rs`
-2. **Review the architecture** - See [docs/architecture.md](docs/architecture.md)
-3. **Read the PRD** - See [docs/PRD.md](docs/PRD.md)
-4. **Follow the roadmap** - See [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md)
+2. **Review the architecture** - See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+3. **Check platform guides** - See platform-specific documentation in [docs/](docs/)
+4. **Explore policies** - Try other example policies: `policies/advanced`, `policies/cross-platform`, `policies/multi`
 
 ## Getting Help
 
@@ -268,16 +276,24 @@ This is expected in Phase 1 as we're processing every execve syscall. Future pha
 - **Architecture**: [docs/architecture.md](docs/architecture.md)
 - **Implementation Plan**: [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md)
 
-## Phase 1 Status
+## Implementation Status
 
-✅ Project structure created  
-✅ eBPF program written  
-✅ WASM runtime integrated  
-✅ Example policy created  
-⏳ Full integration pending  
-⏳ Testing pending  
+### Phase 3 ✅ Complete
+
+**Core Features:**
+✅ Cross-platform support (Linux, Windows, macOS)  
+✅ eBPF event capture (Linux)  
+✅ ETW integration (Windows)  
+✅ ESF integration (macOS)  
+✅ WASM policy evaluation  
+✅ Multiple syscalls (execve, openat, connect)  
+✅ Type-safe event structures  
+✅ Decision caching with LRU  
+✅ Prometheus metrics  
+✅ Structured logging  
 
 ---
 
-**Version:** Phase 1 (PoC)  
-**Last Updated:** 2026-04-29
+**Version:** 1.1.0-beta (Phase 3 Complete)  
+**Last Updated:** 2026-06-02  
+**Status:** Cross-Platform Beta (Linux Production, Windows/macOS Experimental)
