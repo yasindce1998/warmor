@@ -84,4 +84,4 @@ func BenchmarkMultiPolicy(b *testing.B) {
 	policytest.BenchmarkPolicy(b, "policy.wasm", event)
 }
 
-// Made with Bob
+

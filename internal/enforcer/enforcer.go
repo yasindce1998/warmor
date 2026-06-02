@@ -19,6 +19,7 @@ import (
 type Enforcer struct {
 	ebpfLoader    *ebpf.Loader
 	wasmRuntime   *wasm.Runtime
+	evaluatorMu   sync.RWMutex
 	evaluator     *wasm.PolicyEvaluator
 	cache         *cache.DecisionCache
 	actionHandler *ActionHandler
@@ -133,6 +134,10 @@ func (e *Enforcer) Start() {
 func (e *Enforcer) eventLoop() {
 	defer e.wg.Done()
 
+	backoff := 10 * time.Millisecond
+	maxBackoff := 5 * time.Second
+	consecutiveErrors := 0
+
 	for {
 		select {
 		case <-e.ctx.Done():
@@ -141,9 +146,26 @@ func (e *Enforcer) eventLoop() {
 			// Read event from eBPF
 			ebpfEvent, err := e.ebpfLoader.ReadEvent()
 			if err != nil {
+				consecutiveErrors++
 				e.logger.LogError(err, "error reading event")
 				metrics.RecordProcessingError()
+				
+				// Apply exponential backoff after multiple consecutive errors
+				if consecutiveErrors > 3 {
+					e.logger.LogInfo(fmt.Sprintf("Backing off for %v after %d consecutive errors", backoff, consecutiveErrors))
+					time.Sleep(backoff)
+					backoff = backoff * 2
+					if backoff > maxBackoff {
+						backoff = maxBackoff
+					}
+				}
 				continue
+			}
+
+			// Reset backoff on success
+			if consecutiveErrors > 0 {
+				consecutiveErrors = 0
+				backoff = 10 * time.Millisecond
 			}
 
 			// Convert to API event
@@ -177,7 +199,11 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 	metrics.RecordCacheMiss()
 
 	// Evaluate with policy
-	result, err := e.evaluator.Evaluate(e.ctx, event)
+	e.evaluatorMu.RLock()
+	evaluator := e.evaluator
+	e.evaluatorMu.RUnlock()
+	
+	result, err := evaluator.Evaluate(e.ctx, event)
 	if err != nil {
 		e.logger.LogError(err, "policy evaluation failed")
 		metrics.RecordProcessingError()
@@ -291,12 +317,13 @@ func (e *Enforcer) ReloadPolicy() error {
 	hostname, _ := os.Hostname()
 	newEvaluator := wasm.NewPolicyEvaluator(newPolicy, hostname)
 
-	// Atomic swap
+	// Atomic swap with mutex protection
+	e.evaluatorMu.Lock()
 	oldEvaluator := e.evaluator
 	oldRuntime := e.wasmRuntime
-
 	e.evaluator = newEvaluator
 	e.wasmRuntime = newRuntime
+	e.evaluatorMu.Unlock()
 
 	// Clear cache on policy reload
 	e.cache.Clear()
@@ -334,11 +361,16 @@ func (e *Enforcer) Close() error {
 	}
 
 	// Clean up enforcer resources
-	if e.evaluator != nil {
-		e.evaluator.Close(e.ctx)
+	e.evaluatorMu.Lock()
+	evaluator := e.evaluator
+	runtime := e.wasmRuntime
+	e.evaluatorMu.Unlock()
+	
+	if evaluator != nil {
+		evaluator.Close(e.ctx)
 	}
-	if e.wasmRuntime != nil {
-		e.wasmRuntime.Close(e.ctx)
+	if runtime != nil {
+		runtime.Close(e.ctx)
 	}
 	if e.ebpfLoader != nil {
 		e.ebpfLoader.Close()
@@ -347,5 +379,3 @@ func (e *Enforcer) Close() error {
 	e.logger.LogInfo("✓ Resources cleaned up")
 	return nil
 }
-
-// Made with Bob

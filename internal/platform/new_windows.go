@@ -8,4 +8,4 @@ func New() (Platform, error) {
 	return NewWindowsPlatform()
 }
 
-// Made with Bob
+

@@ -8,4 +8,4 @@ func New() (Platform, error) {
 	return NewLinuxPlatform()
 }
 
-// Made with Bob
+

@@ -48,6 +48,13 @@ func (p *Policy) Evaluate(ctx context.Context, event *api.Event) (api.Action, er
 		return api.ActionDeny, fmt.Errorf("malloc failed: %w", err)
 	}
 	ptr := uint32(results[0])
+	
+	// Ensure memory is freed even on error
+	defer func() {
+		if freeFn := p.instance.ExportedFunction("free"); freeFn != nil {
+			freeFn.Call(ctx, uint64(ptr), uint64(len(eventJSON)))
+		}
+	}()
 
 	// Write event data to WASM memory
 	if !p.instance.Memory().Write(ptr, eventJSON) {
@@ -76,5 +83,3 @@ func (p *Policy) Close(ctx context.Context) error {
 	}
 	return nil
 }
-
-// Made with Bob

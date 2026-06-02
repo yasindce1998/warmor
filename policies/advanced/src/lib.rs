@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::slice;
 
 #[derive(Deserialize)]
@@ -112,4 +112,4 @@ pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i3
     ACTION_ALLOW
 }
 
-// Made with Bob
+

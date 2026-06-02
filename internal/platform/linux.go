@@ -106,8 +106,6 @@ func (p *LinuxPlatform) Capabilities() Capabilities {
 		ProcessMonitoring: true,
 		FileMonitoring:    true,  // Phase 3 added openat
 		NetworkMonitoring: true,  // Phase 3 added connect
-		Enforcement:       false, // Phase 4: logging only for now
+		Enforcement:       true,  // eBPF can block syscalls via return values
 	}
 }
-
-// Made with Bob

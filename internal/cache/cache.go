@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/yasindce1998/warmor/pkg/api"
@@ -22,7 +23,7 @@ type DecisionCache struct {
 type CacheEntry struct {
 	Result    *api.ActionResult
 	ExpiresAt time.Time
-	HitCount  uint64
+	HitCount  atomic.Uint64
 }
 
 // CacheStats contains cache statistics
@@ -58,7 +59,7 @@ func (c *DecisionCache) Get(event *api.Event) (*api.ActionResult, bool) {
 		return nil, false
 	}
 
-	entry.HitCount++
+	entry.HitCount.Add(1)
 	result := *entry.Result
 	result.Cached = true
 
@@ -97,7 +98,7 @@ func (c *DecisionCache) Stats() CacheStats {
 
 	var totalHits uint64
 	for _, entry := range c.entries {
-		totalHits += entry.HitCount
+		totalHits += entry.HitCount.Load()
 	}
 
 	return CacheStats{
@@ -108,11 +109,17 @@ func (c *DecisionCache) Stats() CacheStats {
 }
 
 func (c *DecisionCache) makeKey(event *api.Event) string {
-	// Key format: uid:filename_hash
+	// Key format: type:pid:uid:filename_hash
 	h := sha256.New()
 	h.Write([]byte(event.Filename))
 	hash := hex.EncodeToString(h.Sum(nil))[:16]
-	return fmt.Sprintf("%d:%s", event.UID, hash)
+	
+	eventType := "unknown"
+	if event.Type != "" {
+		eventType = string(event.Type)
+	}
+	
+	return fmt.Sprintf("%s:%d:%d:%s", eventType, event.PID, event.UID, hash)
 }
 
 func (c *DecisionCache) evictOldest() {
@@ -130,5 +137,3 @@ func (c *DecisionCache) evictOldest() {
 		delete(c.entries, oldestKey)
 	}
 }
-
-// Made with Bob

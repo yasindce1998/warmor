@@ -1,7 +1,4 @@
 # Binaries
-warmor-daemon
-test-ebpf
-test-wasm
 warmor.exe
 *.exe
 *.dll

@@ -331,4 +331,4 @@ func ParseProcessEvent(record *EVENT_RECORD) (*api.Event, error) {
 	return event, nil
 }
 
-// Made with Bob
+

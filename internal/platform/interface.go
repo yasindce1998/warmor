@@ -41,4 +41,4 @@ func Current() (Platform, error) {
 	return New()
 }
 
-// Made with Bob
+

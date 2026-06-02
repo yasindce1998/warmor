@@ -390,4 +390,4 @@ func goEventHandler(message *C.es_message_t) {
 	// In a real implementation, we'd store the client in a global map
 }
 
-// Made with Bob
+

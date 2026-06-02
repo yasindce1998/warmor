@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
+use std::slice;
 
 /// Event represents a security event from any platform
 #[derive(Debug, Deserialize)]
@@ -11,6 +12,55 @@ struct Event {
     uid: u32,
     gid: u32,
     comm: String,
+
+// Action constants matching Go
+const ACTION_ALLOW: i32 = 0;
+const ACTION_DENY: i32 = 1;
+const ACTION_LOG: i32 = 2;
+
+#[no_mangle]
+pub extern "C" fn malloc(size: usize) -> *mut u8 {
+    let mut buf = Vec::with_capacity(size);
+    let ptr = buf.as_mut_ptr();
+    std::mem::forget(buf);
+    ptr
+}
+
+#[no_mangle]
+pub extern "C" fn free(ptr: *mut u8, size: usize) {
+    unsafe {
+        let _ = Vec::from_raw_parts(ptr, 0, size);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn abi_version() -> u32 {
+    1  // Version 1 of the standardized ABI
+}
+
+#[no_mangle]
+pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i32 {
+    // Parse event from JSON
+    let event_bytes = unsafe { slice::from_raw_parts(event_ptr, event_len) };
+    
+    let event: Event = match serde_json::from_slice(event_bytes) {
+        Ok(e) => e,
+        Err(_) => return ACTION_DENY, // Deny on parse error
+    };
+
+    // Evaluate policy
+    let decision = evaluate_policy(&event);
+    
+    // Convert decision to action code
+    match decision.action.as_str() {
+        "allow" => ACTION_ALLOW,
+        "deny" => ACTION_DENY,
+        "log" => ACTION_LOG,
+        _ => ACTION_DENY,
+    }
+}
+
+
     filename: String,
     #[serde(default)]
     args: Vec<String>,
@@ -222,4 +272,4 @@ pub extern "C" fn free_string(s: *mut c_char) {
     }
 }
 
-// Made with Bob
+

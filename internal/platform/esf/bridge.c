@@ -112,4 +112,4 @@ gid_t get_gid_from_token(audit_token_t token) {
     return audit_token_to_egid(token);
 }
 
-// Made with Bob
+

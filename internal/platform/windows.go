@@ -162,4 +162,4 @@ func (p *WindowsPlatform) GetMode() string {
 	return p.mode
 }
 
-// Made with Bob
+

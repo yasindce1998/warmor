@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::slice;
 
 // Event types matching Go EventType
@@ -208,4 +208,4 @@ fn evaluate_network(event: &NetworkEvent) -> i32 {
     ACTION_ALLOW
 }
 
-// Made with Bob
+

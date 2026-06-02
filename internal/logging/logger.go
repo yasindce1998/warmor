@@ -103,4 +103,4 @@ func (l *Logger) LogShutdown() {
 	l.logger.Info().Msg("warmor_shutting_down")
 }
 
-// Made with Bob
+
