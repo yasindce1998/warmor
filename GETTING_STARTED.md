@@ -1,6 +1,6 @@
 # Getting Started with warmor
 
-This guide will help you build and run warmor Phase 1 - the Linux PoC with eBPF + WASM integration.
+This guide will help you build and run warmor across all supported platforms (Linux, Windows, macOS).
 
 ## Prerequisites
 

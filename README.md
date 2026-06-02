@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26.2+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Phase%203%20Complete-brightgreen)](docs/PHASE3_COMPLETE.md)
+[![Status](https://img.shields.io/badge/Status-Phase%206%20Complete-brightgreen)](docs/PROJECT_COMPLETE.md)
 [![Windows](https://img.shields.io/badge/Windows-Beta%2FETW%2BeBPF-yellow)](docs/PLATFORM_WINDOWS.md)
 [![Linux](https://img.shields.io/badge/Linux-Production-brightgreen)](docs/PLATFORM_LINUX.md)
 [![macOS](https://img.shields.io/badge/macOS-Beta%2FESF-yellow)](docs/PLATFORM_MACOS.md)
@@ -58,7 +58,7 @@ Application → Platform Hook (eBPF/ESF/KMD) → warmor Daemon → WASM Policy �
 - ✅ **Pattern Matching:** Glob and regex support in policies
 - ✅ **Action Enforcement:** ALLOW/DENY/LOG with statistics tracking
 
-### Phase 3 Features (NEW!)
+### Phase 3 Features
 - ✅ **Multi-Syscall Support:** Monitor execve, openat, connect, and more
 - ✅ **Type-Safe Events:** ProcessEvent, FileEvent, NetworkEvent
 - ✅ **Policy Testing Framework:** Automated testing and benchmarking
