@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26.2+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Phase%203%20Complete-brightgreen)](docs/PHASE3_COMPLETE.md)
+[![Status](https://img.shields.io/badge/Status-Phase%204%20Complete-brightgreen)](docs/OVERVIEW.md)
 [![Windows](https://img.shields.io/badge/Windows-Beta%2FETW%2BeBPF-yellow)](docs/PLATFORM_WINDOWS.md)
 [![Linux](https://img.shields.io/badge/Linux-Production-brightgreen)](docs/PLATFORM_LINUX.md)
 [![macOS](https://img.shields.io/badge/macOS-Beta%2FESF-yellow)](docs/PLATFORM_MACOS.md)
@@ -43,27 +43,27 @@ Application → Platform Hook (eBPF/ESF/KMD) → warmor Daemon → WASM Policy �
 ### Core Capabilities
 - ✅ **Cross-Platform:** Same policy works on Linux, Windows, and macOS
   - **Linux:** ✅ Production (eBPF)
-  - **Windows:** 🚧 Beta/Experimental (ETW + eBPF-for-Windows)
-  - **macOS:** 🚧 Beta/Experimental (ESF)
+  - **Windows:** 🚧 Beta (ETW + eBPF-for-Windows)
+  - **macOS:** 🚧 Beta (ESF)
 - ✅ **Safe:** WASM sandbox prevents policy bugs from crashing the system
 - ✅ **Portable:** Write policies in Rust, Go, or C and compile to WASM
 - ✅ **Hot-Reload:** Update policies without restarting the enforcer
 - ✅ **High Performance:** <100μs policy evaluation latency (P95)
 - ✅ **Zero Trust:** Kernel-level enforcement that can't be bypassed
 
-### Phase 2 Features
+### Observability & Performance
 - ✅ **Decision Caching:** 10k-entry LRU cache with >90% hit rate
 - ✅ **Structured Logging:** JSON logs with zerolog for easy parsing
 - ✅ **Prometheus Metrics:** Full observability with /metrics endpoint
 - ✅ **Pattern Matching:** Glob and regex support in policies
 - ✅ **Action Enforcement:** ALLOW/DENY/LOG with statistics tracking
 
-### Phase 3 Features (NEW!)
-- ✅ **Multi-Syscall Support:** Monitor execve, openat, connect, and more
-- ✅ **Type-Safe Events:** ProcessEvent, FileEvent, NetworkEvent
+### Monitoring & Enforcement
+- ✅ **Multi-Syscall Support:** Monitor execve, openat, connect, sendto, recvfrom
+- ✅ **Type-Safe Events:** ProcessEvent, FileEvent, NetworkEvent structures
+- ✅ **Rich Context:** PID, UID, GID, process path, arguments, timestamps
+- ✅ **Real-Time Enforcement:** Block operations before they complete
 - ✅ **Policy Testing Framework:** Automated testing and benchmarking
-- ✅ **Comprehensive Policies:** 14+ rules across process, file, and network
-- ✅ **Backward Compatible:** 100% compatible with Phase 1/2 policies
 
 ---
 
@@ -143,7 +143,7 @@ cd ../..
 sudo ./warmor-daemon -policy policies/example/policy.wasm
 ```
 
-## 📊 Phase 2: Observability & Performance
+## 📊 Observability & Performance
 
 ### Prometheus Metrics
 
@@ -286,39 +286,55 @@ Cache Size: 245/10000
 
 ## 📊 Current Status
 
-**Phases 1-6: Complete** ✅
+**Phases 1-4: Complete** ✅
 
-- [x] Phase 1: Linux PoC (eBPF + WASM)
-- [x] Phase 2: Enforcement & Decision Making
-- [x] Phase 3: Multi-Syscall Support
-- [x] Phase 4: Cross-Platform Foundation
-- [x] Phase 5: Testing & Validation
-- [x] Phase 6: Documentation & Deployment
+- [x] **Phase 1:** Linux PoC with eBPF + WASM Integration
+  - Go daemon with cilium/ebpf integration
+  - Basic policy ABI and multiple syscall hooks
+  - Sample Rust policies with hot-reload capability
 
-**Phase 7: Platform Expansion** (In Progress)
+- [x] **Phase 2:** Enforcement & Decision Making
+  - ALLOW/DENY/LOG actions with statistics
+  - Decision caching with LRU (10k entries, >90% hit rate)
+  - Structured logging with zerolog
+  - Prometheus metrics exposure
 
-- [x] **Linux:** ✅ Production Ready (eBPF)
-  - Process, file, network monitoring
-  - Full eBPF integration
-  - Comprehensive testing
-- [x] **Windows:** 🚧 Beta/Experimental (ETW + eBPF-for-Windows)
-  - ETW-based monitoring (stable fallback)
-  - eBPF-for-Windows support (experimental)
-  - Process, file, network events
-  - Automatic fallback mechanism
-  - See [Windows Guide](docs/PLATFORM_WINDOWS.md)
-- [x] **macOS:** 🚧 Beta/Experimental (ESF)
-  - ESF-based monitoring
-  - Process, file, network events
-  - ✅ Enforcement capable (AUTH events)
-  - Requires System Extension approval
-  - See [macOS Guide](docs/PLATFORM_MACOS.md)
+- [x] **Phase 3:** Multi-Syscall Support
+  - Full support for execve, openat, connect, sendto, recvfrom
+  - Type-safe event structures (ProcessEvent, FileEvent, NetworkEvent)
+  - Policy testing framework and benchmarking
+  - CPU overhead <5% on typical workloads
 
-**Next Phases:**
-- Phase 7.2: eBPF-for-Windows integration
-- Phase 8: Enterprise features (RBAC, Web UI, SIEM)
+- [x] **Phase 4:** Cross-Platform Support
+  - Linux: ✅ Production Ready (eBPF)
+    - Full eBPF integration with comprehensive testing
+    - Process, file, network monitoring
+  - Windows: 🚧 Beta (ETW + eBPF-for-Windows)
+    - ETW-based monitoring with automatic fallback
+    - eBPF-for-Windows support for enforcement
+    - See [Windows Guide](docs/PLATFORM_WINDOWS.md)
+  - macOS: 🚧 Beta (ESF)
+    - Endpoint Security Framework integration
+    - AUTH events enable real-time enforcement
+    - Requires System Extension approval
+    - See [macOS Guide](docs/PLATFORM_MACOS.md)
 
-See [OVERVIEW.md](docs/OVERVIEW.md) for full status.
+**Phase 5: Production Readiness** 🚧 (In Progress)
+- [x] Structured logging and metrics infrastructure
+- [x] Comprehensive documentation for all platforms
+- [ ] Kubernetes DaemonSet and Helm charts
+- [ ] Grafana dashboards
+- [ ] Production security audit and hardening
+
+**Phase 6: Advanced Features** ⏳ (Planned)
+- Stateful policy engine with process lineage tracking
+- Policy as Code DSL for easier authoring
+- Central policy management server for fleet management
+- A/B testing framework for policy changes
+- Advanced enforcement (network filtering, encryption)
+- SIEM integration
+
+See [OVERVIEW.md](docs/OVERVIEW.md) for complete status and roadmap.
 
 ---
 
@@ -439,5 +455,5 @@ warmor is licensed under the [MIT License](LICENSE).
 
 **Made with ❤️ by the warmor team**
 
-**Version:** 1.1.0-beta (Linux Production, Windows Beta)  
-**Last Updated:** 2026-06-01
+**Version:** 1.1.0-beta (Linux Production, Windows/macOS Beta)  
+**Last Updated:** 2026-06-02
