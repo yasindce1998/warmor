@@ -1,0 +1,11 @@
+{"id":"c89214ce-3b68-4b62-8d49-47d6367d790f","ts":"2026-06-02T09:39:16.067Z","path":"C:/Users/MohammedYasin/warmor/internal/cache/cache.go","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"6be862f7-0e78-4473-890e-e921cddc3863","ts":"2026-06-02T09:39:23.921Z","path":"C:/Users/MohammedYasin/warmor/internal/cache/cache.go","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"bbfc81f3-90ef-4bf8-9fd7-614111d049bf","ts":"2026-06-02T09:39:49.948Z","path":"C:/Users/MohammedYasin/warmor/internal/enforcer/enforcer.go","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"b3d3b804-99d0-4f1f-92e4-f0b97d7ec90a","ts":"2026-06-02T09:40:11.081Z","path":"C:/Users/MohammedYasin/warmor/internal/wasm/policy.go","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"c234c7f6-79ca-49d6-97d1-a979fce59d80","ts":"2026-06-02T09:40:24.794Z","path":"C:/Users/MohammedYasin/warmor/internal/enforcer/enforcer.go","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"5fd1b4f4-2cdf-4cec-9cab-8b478265768d","ts":"2026-06-02T09:40:49.434Z","path":"C:/Users/MohammedYasin/warmor/internal/platform/linux.go","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"e1bcce46-6f61-4b8e-90e8-0c6fa89ca0c8","ts":"2026-06-02T09:41:58.367Z","path":"C:/Users/MohammedYasin/warmor/policies/example/src/lib.rs","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"19d04aa5-97bf-4048-b75e-3e66bc4dd328","ts":"2026-06-02T09:42:09.879Z","path":"C:/Users/MohammedYasin/warmor/policies/cross-platform/src/lib.rs","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"b2366022-8f21-4f20-8335-657821e4e5af","ts":"2026-06-02T09:42:19.370Z","path":"C:/Users/MohammedYasin/warmor/policies/cross-platform/src/lib.rs","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"dbb2e3b8-7830-49fe-a716-73df8ca0f83b","ts":"2026-06-02T09:42:30.818Z","path":"C:/Users/MohammedYasin/warmor/policies/advanced/src/lib.rs","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
+{"id":"8a5424d0-e648-4823-aa45-4e33f97b885e","ts":"2026-06-02T09:42:40.384Z","path":"C:/Users/MohammedYasin/warmor/policies/multi/src/lib.rs","version":"1.0.0","taskID":"1bbc9b99-aae5-476f-99ec-75e8752e8460"}
