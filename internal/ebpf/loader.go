@@ -113,5 +113,3 @@ func (l *Loader) Close() error {
 
 	return nil
 }
-
-

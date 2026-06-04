@@ -40,5 +40,3 @@ type Capabilities struct {
 func Current() (Platform, error) {
 	return New()
 }
-
-

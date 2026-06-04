@@ -5,7 +5,6 @@ package etw
 
 import (
 	"fmt"
-	"syscall"
 	"time"
 	"unsafe"
 
@@ -19,75 +18,75 @@ const (
 	EVENT_TRACE_CONTROL_STOP   = 1
 	EVENT_TRACE_CONTROL_UPDATE = 2
 
-	PROCESS_TRACE_MODE_REAL_TIME = 0x00000100
+	PROCESS_TRACE_MODE_REAL_TIME    = 0x00000100
 	PROCESS_TRACE_MODE_EVENT_RECORD = 0x10000000
 
 	TRACE_LEVEL_INFORMATION = 4
-	
+
 	// Process event keywords
 	WINEVENT_KEYWORD_PROCESS = 0x10
 )
 
 var (
 	advapi32 = windows.NewLazySystemDLL("advapi32.dll")
-	
-	procStartTrace        = advapi32.NewProc("StartTraceW")
-	procEnableTraceEx2    = advapi32.NewProc("EnableTraceEx2")
-	procControlTrace      = advapi32.NewProc("ControlTraceW")
-	procOpenTrace         = advapi32.NewProc("OpenTraceW")
-	procProcessTrace      = advapi32.NewProc("ProcessTrace")
-	procCloseTrace        = advapi32.NewProc("CloseTrace")
+
+	procStartTrace     = advapi32.NewProc("StartTraceW")
+	procEnableTraceEx2 = advapi32.NewProc("EnableTraceEx2")
+	procControlTrace   = advapi32.NewProc("ControlTraceW")
+	procOpenTrace      = advapi32.NewProc("OpenTraceW")
+	procProcessTrace   = advapi32.NewProc("ProcessTrace")
+	procCloseTrace     = advapi32.NewProc("CloseTrace")
 )
 
 // EVENT_TRACE_PROPERTIES structure
 type EVENT_TRACE_PROPERTIES struct {
-	Wnode                  WNODE_HEADER
-	BufferSize             uint32
-	MinimumBuffers         uint32
-	MaximumBuffers         uint32
-	MaximumFileSize        uint32
-	LogFileMode            uint32
-	FlushTimer             uint32
-	EnableFlags            uint32
-	AgeLimit               int32
-	NumberOfBuffers        uint32
-	FreeBuffers            uint32
-	EventsLost             uint32
-	BuffersWritten         uint32
-	LogBuffersLost         uint32
-	RealTimeBuffersLost    uint32
-	LoggerThreadId         windows.Handle
-	LogFileNameOffset      uint32
-	LoggerNameOffset       uint32
+	Wnode               WNODE_HEADER
+	BufferSize          uint32
+	MinimumBuffers      uint32
+	MaximumBuffers      uint32
+	MaximumFileSize     uint32
+	LogFileMode         uint32
+	FlushTimer          uint32
+	EnableFlags         uint32
+	AgeLimit            int32
+	NumberOfBuffers     uint32
+	FreeBuffers         uint32
+	EventsLost          uint32
+	BuffersWritten      uint32
+	LogBuffersLost      uint32
+	RealTimeBuffersLost uint32
+	LoggerThreadId      windows.Handle
+	LogFileNameOffset   uint32
+	LoggerNameOffset    uint32
 }
 
 // WNODE_HEADER structure
 type WNODE_HEADER struct {
-	BufferSize    uint32
-	ProviderId    uint32
+	BufferSize        uint32
+	ProviderId        uint32
 	HistoricalContext uint64
-	TimeStamp     int64
-	Guid          windows.GUID
-	ClientContext uint32
-	Flags         uint32
+	TimeStamp         int64
+	Guid              windows.GUID
+	ClientContext     uint32
+	Flags             uint32
 }
 
 // EVENT_TRACE_LOGFILE structure
 type EVENT_TRACE_LOGFILE struct {
-	LogFileName           *uint16
-	LoggerName            *uint16
-	CurrentTime           int64
-	BuffersRead           uint32
-	LogFileMode           uint32
-	CurrentEvent          EVENT_TRACE
-	LogfileHeader         TRACE_LOGFILE_HEADER
-	BufferCallback        uintptr
-	BufferSize            uint32
-	Filled                uint32
-	EventsLost            uint32
-	EventRecordCallback   uintptr
-	IsKernelTrace         uint32
-	Context               uintptr
+	LogFileName         *uint16
+	LoggerName          *uint16
+	CurrentTime         int64
+	BuffersRead         uint32
+	LogFileMode         uint32
+	CurrentEvent        EVENT_TRACE
+	LogfileHeader       TRACE_LOGFILE_HEADER
+	BufferCallback      uintptr
+	BufferSize          uint32
+	Filled              uint32
+	EventsLost          uint32
+	EventRecordCallback uintptr
+	IsKernelTrace       uint32
+	Context             uintptr
 }
 
 // EVENT_TRACE structure
@@ -153,17 +152,17 @@ type EVENT_RECORD struct {
 
 // EVENT_HEADER structure
 type EVENT_HEADER struct {
-	Size          uint16
-	HeaderType    uint16
-	Flags         uint16
-	EventProperty uint16
-	ThreadId      uint32
-	ProcessId     uint32
-	TimeStamp     int64
-	ProviderId    windows.GUID
+	Size            uint16
+	HeaderType      uint16
+	Flags           uint16
+	EventProperty   uint16
+	ThreadId        uint32
+	ProcessId       uint32
+	TimeStamp       int64
+	ProviderId      windows.GUID
 	EventDescriptor EVENT_DESCRIPTOR
-	ProcessorTime uint64
-	ActivityId    windows.GUID
+	ProcessorTime   uint64
+	ActivityId      windows.GUID
 }
 
 // EVENT_DESCRIPTOR structure
@@ -222,7 +221,7 @@ func StartProcessTracing(sessionName string, callback func(*api.Event)) (windows
 	props.Wnode.Flags = 0x00020000 // WNODE_FLAG_TRACED_GUID
 	props.Wnode.ClientContext = 1  // QPC clock resolution
 	props.Wnode.Guid = ProcessProviderGUID
-	props.BufferSize = 64           // KB
+	props.BufferSize = 64 // KB
 	props.MinimumBuffers = 20
 	props.MaximumBuffers = 200
 	props.LogFileMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD
@@ -330,5 +329,3 @@ func ParseProcessEvent(record *EVENT_RECORD) (*api.Event, error) {
 
 	return event, nil
 }
-
-

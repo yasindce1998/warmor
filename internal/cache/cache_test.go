@@ -472,5 +472,3 @@ func BenchmarkDecisionCache_MakeKey(b *testing.B) {
 		c.makeKey(event)
 	}
 }
-
-

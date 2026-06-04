@@ -78,5 +78,3 @@ func (m *Matcher) ClearCache() {
 	defer m.mu.Unlock()
 	m.regexCache = make(map[string]*regexp.Regexp)
 }
-
-

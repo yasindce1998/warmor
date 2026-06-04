@@ -29,5 +29,3 @@ func (l *Loader) ReadEvent() (*Event, error) {
 func (l *Loader) Close() error {
 	return nil
 }
-
-

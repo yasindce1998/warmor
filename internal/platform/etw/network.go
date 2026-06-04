@@ -19,14 +19,14 @@ const (
 
 // NetworkEventData represents parsed network event data
 type NetworkEventData struct {
-	ProcessID    uint32
-	ThreadID     uint32
-	LocalAddr    string
-	LocalPort    uint16
-	RemoteAddr   string
-	RemotePort   uint16
-	Protocol     string // "TCP" or "UDP"
-	Operation    string // "connect", "accept", "send", "recv"
+	ProcessID        uint32
+	ThreadID         uint32
+	LocalAddr        string
+	LocalPort        uint16
+	RemoteAddr       string
+	RemotePort       uint16
+	Protocol         string // "TCP" or "UDP"
+	Operation        string // "connect", "accept", "send", "recv"
 	BytesTransferred uint32
 }
 
@@ -47,7 +47,7 @@ func StartNetworkTracing(sessionName string, callback func(*api.Event)) (windows
 	props.Wnode.Flags = 0x00020000 // WNODE_FLAG_TRACED_GUID
 	props.Wnode.ClientContext = 1  // QPC clock resolution
 	props.Wnode.Guid = NetworkProviderGUID
-	props.BufferSize = 64           // KB
+	props.BufferSize = 64 // KB
 	props.MinimumBuffers = 20
 	props.MaximumBuffers = 200
 	props.LogFileMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD
@@ -171,5 +171,3 @@ func ParseNetworkEvent(record *EVENT_RECORD) (*api.Event, error) {
 	event.Network = networkEvent
 	return event, nil
 }
-
-

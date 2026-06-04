@@ -505,5 +505,3 @@ func BenchmarkMatcher_MatchAny(b *testing.B) {
 		m.MatchAny(patterns, text)
 	}
 }
-
-

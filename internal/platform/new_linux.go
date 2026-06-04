@@ -7,5 +7,3 @@ package platform
 func New() (Platform, error) {
 	return NewLinuxPlatform()
 }
-
-

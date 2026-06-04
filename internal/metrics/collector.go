@@ -100,5 +100,3 @@ func SetPolicyInfo(path, version string) {
 func RecordProcessingError() {
 	EventsProcessingErrors.Inc()
 }
-
-

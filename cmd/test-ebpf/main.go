@@ -63,5 +63,3 @@ func main() {
 	log.Println("Shutting down...")
 	log.Printf("Total events captured: %d", eventCount)
 }
-
-

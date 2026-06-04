@@ -83,5 +83,3 @@ func BenchmarkMultiPolicy(b *testing.B) {
 	event := policytest.NewProcessEvent(1000, "/usr/bin/ls")
 	policytest.BenchmarkPolicy(b, "policy.wasm", event)
 }
-
-

@@ -47,18 +47,12 @@ func (h *ActionHandler) handleAllow(event *api.Event, result *api.ActionResult) 
 }
 
 func (h *ActionHandler) handleDeny(event *api.Event, result *api.ActionResult) error {
-	// Log the denial
-	fmt.Printf("[DENY] PID=%d UID=%d COMM=%s FILE=%s REASON=%s\n",
-		event.PID, event.UID, event.Comm, event.Filename, result.Reason)
-
 	// In Phase 2, we simulate enforcement
 	// Phase 3 will add actual process termination via eBPF
 	return nil
 }
 
 func (h *ActionHandler) handleLog(event *api.Event, result *api.ActionResult) error {
-	fmt.Printf("[LOG] PID=%d UID=%d COMM=%s FILE=%s REASON=%s\n",
-		event.PID, event.UID, event.Comm, event.Filename, result.Reason)
 	return nil
 }
 
@@ -70,5 +64,3 @@ func (h *ActionHandler) GetStats() api.EnforcementStats {
 		Logged:  atomic.LoadUint64(&h.logged),
 	}
 }
-
-

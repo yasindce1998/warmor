@@ -48,7 +48,7 @@ func (p *Policy) Evaluate(ctx context.Context, event *api.Event) (api.Action, er
 		return api.ActionDeny, fmt.Errorf("malloc failed: %w", err)
 	}
 	ptr := uint32(results[0])
-	
+
 	// Ensure memory is freed even on error
 	defer func() {
 		if freeFn := p.instance.ExportedFunction("free"); freeFn != nil {

@@ -99,11 +99,9 @@ func (p *DarwinPlatform) Close() error {
 func (p *DarwinPlatform) Capabilities() Capabilities {
 	// ESF provides full monitoring and enforcement
 	return Capabilities{
-		ProcessMonitoring: true,  // ESF process events
-		FileMonitoring:    true,  // ESF file events
-		NetworkMonitoring: true,  // ESF network events
-		Enforcement:       true,  // ESF AUTH events can block
+		ProcessMonitoring: true, // ESF process events
+		FileMonitoring:    true, // ESF file events
+		NetworkMonitoring: true, // ESF network events
+		Enforcement:       true, // ESF AUTH events can block
 	}
 }
-
-

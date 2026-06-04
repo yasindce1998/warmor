@@ -113,21 +113,18 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 }
 
 // Start begins processing events
-func (e *Enforcer) Start() {
+func (e *Enforcer) Start() error {
 	// Start metrics server
-	e.wg.Add(1)
-	go func() {
-		defer e.wg.Done()
-		if err := e.metricsServer.Start(); err != nil {
-			e.logger.LogError(err, "metrics server stopped")
-		}
-	}()
+	if err := e.metricsServer.Start(); err != nil {
+		return fmt.Errorf("start metrics server: %w", err)
+	}
 
 	// Start event processing
 	e.wg.Add(1)
 	go e.eventLoop()
 
 	e.logger.LogInfo("Enforcer started, processing events...")
+	return nil
 }
 
 // eventLoop processes events from eBPF and evaluates them with WASM
@@ -149,7 +146,7 @@ func (e *Enforcer) eventLoop() {
 				consecutiveErrors++
 				e.logger.LogError(err, "error reading event")
 				metrics.RecordProcessingError()
-				
+
 				// Apply exponential backoff after multiple consecutive errors
 				if consecutiveErrors > 3 {
 					e.logger.LogInfo(fmt.Sprintf("Backing off for %v after %d consecutive errors", backoff, consecutiveErrors))
@@ -202,7 +199,7 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 	e.evaluatorMu.RLock()
 	evaluator := e.evaluator
 	e.evaluatorMu.RUnlock()
-	
+
 	result, err := evaluator.Evaluate(e.ctx, event)
 	if err != nil {
 		e.logger.LogError(err, "policy evaluation failed")
@@ -345,6 +342,13 @@ func (e *Enforcer) ReloadPolicy() error {
 func (e *Enforcer) Stop() {
 	e.logger.LogInfo("Stopping enforcer...")
 	e.cancel()
+
+	// Close eBPF loader to unblock ReadEvent
+	if e.ebpfLoader != nil {
+		e.ebpfLoader.Close()
+		e.ebpfLoader = nil
+	}
+
 	e.wg.Wait()
 	e.logger.LogInfo("✓ Enforcer stopped")
 }
@@ -365,7 +369,7 @@ func (e *Enforcer) Close() error {
 	evaluator := e.evaluator
 	runtime := e.wasmRuntime
 	e.evaluatorMu.Unlock()
-	
+
 	if evaluator != nil {
 		evaluator.Close(e.ctx)
 	}
@@ -374,6 +378,7 @@ func (e *Enforcer) Close() error {
 	}
 	if e.ebpfLoader != nil {
 		e.ebpfLoader.Close()
+		e.ebpfLoader = nil
 	}
 
 	e.logger.LogInfo("✓ Resources cleaned up")

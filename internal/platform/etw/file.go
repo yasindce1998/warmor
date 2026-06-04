@@ -19,13 +19,13 @@ const (
 
 // FileEventData represents parsed file event data
 type FileEventData struct {
-	ProcessID   uint32
-	ThreadID    uint32
-	FileObject  uint64
-	FileName    string
-	Operation   string
-	Flags       uint32
-	ShareAccess uint32
+	ProcessID      uint32
+	ThreadID       uint32
+	FileObject     uint64
+	FileName       string
+	Operation      string
+	Flags          uint32
+	ShareAccess    uint32
 	FileAttributes uint32
 }
 
@@ -46,7 +46,7 @@ func StartFileTracing(sessionName string, callback func(*api.Event)) (windows.Ha
 	props.Wnode.Flags = 0x00020000 // WNODE_FLAG_TRACED_GUID
 	props.Wnode.ClientContext = 1  // QPC clock resolution
 	props.Wnode.Guid = FileProviderGUID
-	props.BufferSize = 64           // KB
+	props.BufferSize = 64 // KB
 	props.MinimumBuffers = 20
 	props.MaximumBuffers = 200
 	props.LogFileMode = PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD
@@ -165,5 +165,3 @@ func ParseFileEvent(record *EVENT_RECORD) (*api.Event, error) {
 	event.File = fileEvent
 	return event, nil
 }
-
-

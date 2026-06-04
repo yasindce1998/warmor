@@ -439,5 +439,3 @@ func BenchmarkUpdateCacheSize(b *testing.B) {
 		UpdateCacheSize(i % 1000)
 	}
 }
-
-

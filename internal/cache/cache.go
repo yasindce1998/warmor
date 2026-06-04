@@ -80,7 +80,6 @@ func (c *DecisionCache) Put(event *api.Event, result *api.ActionResult) {
 	c.entries[key] = &CacheEntry{
 		Result:    result,
 		ExpiresAt: time.Now().Add(c.ttl),
-		HitCount:  0,
 	}
 }
 
@@ -113,12 +112,12 @@ func (c *DecisionCache) makeKey(event *api.Event) string {
 	h := sha256.New()
 	h.Write([]byte(event.Filename))
 	hash := hex.EncodeToString(h.Sum(nil))[:16]
-	
+
 	eventType := "unknown"
-	if event.Type != "" {
-		eventType = string(event.Type)
+	if event.Type != 0 {
+		eventType = event.Type.String()
 	}
-	
+
 	return fmt.Sprintf("%s:%d:%d:%s", eventType, event.PID, event.UID, hash)
 }
 

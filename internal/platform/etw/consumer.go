@@ -7,8 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"syscall"
-	"unsafe"
+	"time"
 
 	"github.com/yasindce1998/warmor/pkg/api"
 	"golang.org/x/sys/windows"
@@ -127,7 +126,7 @@ func (c *Consumer) consumeProcessEvents(ctx context.Context) {
 	// 4. Event parsing and conversion
 
 	// Placeholder: Generate test events
-	ticker := windows.NewTicker(5 * windows.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -137,15 +136,14 @@ func (c *Consumer) consumeProcessEvents(ctx context.Context) {
 		case <-c.stopChan:
 			return
 		case <-ticker.C:
-			// Placeholder event
+			// Simulated ETW polling
 			event := &api.Event{
 				Type:      api.EventTypeProcess,
-				PID:       uint32(windows.GetCurrentProcessId()),
-				UID:       1000, // TODO: Get actual user SID
-				GID:       1000,
-				Comm:      "etw_test.exe",
-				Filename:  "C:\\Windows\\System32\\etw_test.exe",
-				Timestamp: windows.Now(),
+				PID:       1234,
+				UID:       1000,
+				Comm:      "test.exe",
+				Filename:  "C:\\Windows\\System32\\test.exe",
+				Timestamp: time.Now(),
 			}
 
 			select {
@@ -255,5 +253,3 @@ func parseNetworkEvent(record *EventRecord) (*api.Event, error) {
 	// TODO: Parse network event data
 	return nil, fmt.Errorf("not implemented")
 }
-
-

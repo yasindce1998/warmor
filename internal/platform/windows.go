@@ -42,7 +42,7 @@ func (p *WindowsPlatform) Name() string {
 func (p *WindowsPlatform) Load(ctx context.Context) error {
 	log.Println("Windows platform: Initializing monitoring")
 	log.Println("Note: Windows support is EXPERIMENTAL/BETA")
-	
+
 	// Step 1: Try to detect and use eBPF-for-Windows
 	ebpfAvailable, err := etw.DetectEBPFForWindows()
 	if err != nil {
@@ -54,7 +54,7 @@ func (p *WindowsPlatform) Load(ctx context.Context) error {
 		log.Printf("  Service: %v", ebpfAvailable.ServiceRunning)
 		log.Printf("  Driver: %v", ebpfAvailable.DriverLoaded)
 		log.Printf("  Version: %s", ebpfAvailable.Version)
-		
+
 		// Try to initialize eBPF-for-Windows
 		if err := p.initializeEBPF(ctx); err != nil {
 			log.Printf("⚠ Failed to initialize eBPF-for-Windows: %v", err)
@@ -147,13 +147,13 @@ func (p *WindowsPlatform) Capabilities() Capabilities {
 func (p *WindowsPlatform) initializeEBPF(ctx context.Context) error {
 	// TODO: Implement eBPF-for-Windows initialization
 	// This will be implemented in a future phase when eBPF-for-Windows is production-ready
-	// 
+	//
 	// Steps:
 	// 1. Load eBPF programs (similar to Linux implementation)
 	// 2. Attach to hook points
 	// 3. Set up event channels
 	// 4. Start event processing
-	
+
 	return fmt.Errorf("eBPF-for-Windows initialization not yet implemented")
 }
 
@@ -161,5 +161,3 @@ func (p *WindowsPlatform) initializeEBPF(ctx context.Context) error {
 func (p *WindowsPlatform) GetMode() string {
 	return p.mode
 }
-
-

@@ -102,5 +102,3 @@ func (l *Logger) LogStartup(policyPath string) {
 func (l *Logger) LogShutdown() {
 	l.logger.Info().Msg("warmor_shutting_down")
 }
-
-

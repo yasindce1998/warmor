@@ -13,23 +13,23 @@ import (
 
 var (
 	advapi32Dll = windows.NewLazySystemDLL("advapi32.dll")
-	
-	procOpenSCManager = advapi32Dll.NewProc("OpenSCManagerW")
-	procOpenService   = advapi32Dll.NewProc("OpenServiceW")
+
+	procOpenSCManager      = advapi32Dll.NewProc("OpenSCManagerW")
+	procOpenService        = advapi32Dll.NewProc("OpenServiceW")
 	procQueryServiceStatus = advapi32Dll.NewProc("QueryServiceStatus")
 	procCloseServiceHandle = advapi32Dll.NewProc("CloseServiceHandle")
 )
 
 const (
-	SC_MANAGER_CONNECT        = 0x0001
-	SERVICE_QUERY_STATUS      = 0x0004
-	SERVICE_RUNNING           = 0x00000004
-	SERVICE_STOPPED           = 0x00000001
-	SERVICE_START_PENDING     = 0x00000002
-	SERVICE_STOP_PENDING      = 0x00000003
-	SERVICE_CONTINUE_PENDING  = 0x00000005
-	SERVICE_PAUSE_PENDING     = 0x00000006
-	SERVICE_PAUSED            = 0x00000007
+	SC_MANAGER_CONNECT       = 0x0001
+	SERVICE_QUERY_STATUS     = 0x0004
+	SERVICE_RUNNING          = 0x00000004
+	SERVICE_STOPPED          = 0x00000001
+	SERVICE_START_PENDING    = 0x00000002
+	SERVICE_STOP_PENDING     = 0x00000003
+	SERVICE_CONTINUE_PENDING = 0x00000005
+	SERVICE_PAUSE_PENDING    = 0x00000006
+	SERVICE_PAUSED           = 0x00000007
 )
 
 // SERVICE_STATUS structure
@@ -45,11 +45,11 @@ type SERVICE_STATUS struct {
 
 // EBPFAvailability represents the availability status of eBPF-for-Windows
 type EBPFAvailability struct {
-	Available       bool
-	ServiceRunning  bool
-	DriverLoaded    bool
-	Version         string
-	ErrorMessage    string
+	Available      bool
+	ServiceRunning bool
+	DriverLoaded   bool
+	Version        string
+	ErrorMessage   string
 }
 
 // DetectEBPFForWindows checks if eBPF-for-Windows is available and running
@@ -194,5 +194,3 @@ func GetServiceStatusString(state uint32) string {
 		return "unknown"
 	}
 }
-
-

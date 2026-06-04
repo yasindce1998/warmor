@@ -59,7 +59,9 @@ func main() {
 	log.Println("")
 
 	// Start enforcer
-	enf.Start()
+	if err := enf.Start(); err != nil {
+		log.Fatalf("❌ Failed to start enforcer: %v", err)
+	}
 
 	// Set up signal handling
 	sigChan := make(chan os.Signal, 1)
@@ -116,5 +118,3 @@ Version: 1.1.0-beta
 `
 	log.Println(banner)
 }
-
-

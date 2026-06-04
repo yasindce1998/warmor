@@ -104,8 +104,8 @@ func (p *LinuxPlatform) Close() error {
 func (p *LinuxPlatform) Capabilities() Capabilities {
 	return Capabilities{
 		ProcessMonitoring: true,
-		FileMonitoring:    true,  // Phase 3 added openat
-		NetworkMonitoring: true,  // Phase 3 added connect
-		Enforcement:       true,  // eBPF can block syscalls via return values
+		FileMonitoring:    true, // Phase 3 added openat
+		NetworkMonitoring: true, // Phase 3 added connect
+		Enforcement:       true, // eBPF can block syscalls via return values
 	}
 }

@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -32,9 +33,20 @@ func NewServer(port int) *Server {
 	}
 }
 
-// Start starts the metrics server
+// Start starts the metrics server and returns an error if port binding fails
 func (s *Server) Start() error {
-	return s.server.ListenAndServe()
+	listener, err := net.Listen("tcp", s.server.Addr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", s.server.Addr, err)
+	}
+
+	go func() {
+		if err := s.server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("metrics server error: %v\n", err)
+		}
+	}()
+
+	return nil
 }
 
 // Stop gracefully stops the metrics server
@@ -51,5 +63,3 @@ func readyHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("READY"))
 }
-
-

@@ -43,5 +43,3 @@ func loadExecve_monitorObjects(obj *execve_monitorObjects, opts *ebpf.Collection
 // The actual generated files will be:
 // - execve_monitor_bpfeb.go (big-endian)
 // - execve_monitor_bpfel.go (little-endian)
-
-

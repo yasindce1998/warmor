@@ -77,5 +77,3 @@ func (e *PolicyEvaluator) buildReason(action api.Action, event *api.Event) strin
 func (e *PolicyEvaluator) Close(ctx context.Context) error {
 	return e.policy.Close(ctx)
 }
-
-

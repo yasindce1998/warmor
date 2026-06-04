@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/yasindce1998/warmor/pkg/api"
@@ -22,8 +23,8 @@ const (
 	BPF_PROG_TYPE_BIND   = 8
 
 	// Map types
-	BPF_MAP_TYPE_HASH         = 1
-	BPF_MAP_TYPE_ARRAY        = 2
+	BPF_MAP_TYPE_HASH             = 1
+	BPF_MAP_TYPE_ARRAY            = 2
 	BPF_MAP_TYPE_PERF_EVENT_ARRAY = 4
 
 	// Commands
@@ -39,7 +40,7 @@ const (
 var (
 	// Load eBPF-for-Windows DLL
 	ebpfApiDll = windows.NewLazySystemDLL("ebpfapi.dll")
-	
+
 	// eBPF API functions
 	procEbpfLoadProgram   = ebpfApiDll.NewProc("ebpf_load_program")
 	procEbpfAttachProgram = ebpfApiDll.NewProc("ebpf_attach_program")
@@ -51,15 +52,15 @@ var (
 
 // EBPFLoader manages eBPF-for-Windows programs
 type EBPFLoader struct {
-	programsLoaded   bool
-	processProgram   windows.Handle
-	fileProgram      windows.Handle
-	networkProgram   windows.Handle
-	eventMap         windows.Handle
-	eventChan        chan<- *api.Event
-	stopChan         chan struct{}
-	wg               sync.WaitGroup
-	mu               sync.Mutex
+	programsLoaded bool
+	processProgram windows.Handle
+	fileProgram    windows.Handle
+	networkProgram windows.Handle
+	eventMap       windows.Handle
+	eventChan      chan<- *api.Event
+	stopChan       chan struct{}
+	wg             sync.WaitGroup
+	mu             sync.Mutex
 }
 
 // NewEBPFLoader creates a new eBPF-for-Windows loader
@@ -252,7 +253,7 @@ func (l *EBPFLoader) loadProgram(filename string, progType int) (windows.Handle,
 	// 2. Parse ELF format
 	// 3. Extract eBPF bytecode
 	// 4. Call ebpf_load_program with bytecode
-	
+
 	// For now, return a placeholder error indicating the file is needed
 	return 0, fmt.Errorf("eBPF program loading requires compiled .o files in bpf-windows/ directory")
 }
@@ -298,7 +299,7 @@ func (l *EBPFLoader) processEvents(ctx context.Context) {
 	// 5. Send to eventChan
 
 	// Placeholder: Generate test events
-	ticker := windows.NewTicker(5 * windows.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -311,12 +312,12 @@ func (l *EBPFLoader) processEvents(ctx context.Context) {
 			// Placeholder event from eBPF
 			event := &api.Event{
 				Type:      api.EventTypeProcess,
-				PID:       uint32(windows.GetCurrentProcessId()),
+				PID:       1234,
 				UID:       1000,
 				GID:       1000,
 				Comm:      "ebpf_test.exe",
 				Filename:  "C:\\Windows\\System32\\ebpf_test.exe",
-				Timestamp: windows.Now(),
+				Timestamp: time.Now(),
 			}
 
 			select {
@@ -336,12 +337,10 @@ func (l *EBPFLoader) GetStatistics() map[string]interface{} {
 	defer l.mu.Unlock()
 
 	return map[string]interface{}{
-		"programs_loaded":   l.programsLoaded,
-		"process_program":   l.processProgram != 0,
-		"file_program":      l.fileProgram != 0,
-		"network_program":   l.networkProgram != 0,
-		"mode":              "ebpf",
+		"programs_loaded": l.programsLoaded,
+		"process_program": l.processProgram != 0,
+		"file_program":    l.fileProgram != 0,
+		"network_program": l.networkProgram != 0,
+		"mode":            "ebpf",
 	}
 }
-
-
