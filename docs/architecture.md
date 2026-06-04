@@ -76,7 +76,7 @@ Traditional security enforcers are platform-specific:
 | Platform | Status | Technology | Enforcement | Latency (P95) | Throughput |
 |----------|--------|------------|-------------|---------|------------|
 | **Linux** | ✅ Production | eBPF | ✅ Yes | <100μs | 100k+/sec |
-| **Windows** | 🚧 Beta | ETW + eBPF-for-Windows | ✅ Yes (eBPF mode) | <100μs | 100k+/sec |
+| **Windows** | 🚧 Beta | ETW + eBPF-for-Windows | ❌ Planned (eBPF mode) | <100μs | 100k+/sec |
 | **macOS** | 🚧 Beta | ESF | ✅ Yes (AUTH events) | <100μs | 100k+/sec |
 
 ---
@@ -157,7 +157,7 @@ pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i3
 
 **Implementation:** LRU cache with TTL
 
-**Key Format:** `{pid}:{uid}:{filename}`
+**Key Format:** `{type}:{pid}:{uid}:{filename_hash}`
 
 **Performance:**
 - 10,000 entry capacity

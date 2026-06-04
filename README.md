@@ -401,12 +401,12 @@ warmor/
 ├── docs/                  # Documentation
 │   ├── ARCHITECTURE.md    # System architecture
 │   ├── PRD.md             # Product requirements
-│   ├── PROJECT_COMPLETE.md # Project status
+│   ├── OVERVIEW.md        # Project status
 │   ├── PLATFORM_LINUX.md  # Linux guide
 │   ├── PLATFORM_WINDOWS.md # Windows guide
 │   └── PLATFORM_MACOS.md  # macOS guide
 ├── .gitignore             # Git ignore rules
-├── .bobignore             # Bob ignore rules
+
 ├── BUILD.md               # Build instructions
 ├── GETTING_STARTED.md     # Quick start guide
 ├── README.md              # This file

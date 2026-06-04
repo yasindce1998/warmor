@@ -21,7 +21,7 @@ warmor is a **cross-platform WASM-powered security enforcer** that solves the "P
 | Platform | Status | Technology | Enforcement | Latency (P95) | Throughput |
 |----------|--------|------------|-------------|---------|------------|
 | **Linux** | ✅ Production | eBPF | ✅ Yes | <100μs | 100k+/sec |
-| **Windows** | 🚧 Beta | ETW + eBPF-for-Windows | ✅ Yes (eBPF mode) | <100μs | 100k+/sec |
+| **Windows** | 🚧 Beta | ETW + eBPF-for-Windows | ❌ Planned (eBPF mode) | <100μs | 100k+/sec |
 | **macOS** | 🚧 Beta | ESF | ✅ Yes (AUTH events) | <100μs | 100k+/sec |
 
 ### Implementation Summary
@@ -39,7 +39,7 @@ warmor is a **cross-platform WASM-powered security enforcer** that solves the "P
 #### 🚧 Windows (Beta)
 - **Technology:** Dual-mode (ETW + eBPF-for-Windows KMD)
 - **ETW Mode:** User-space monitoring, ~100μs latency, monitoring only
-- **eBPF Mode:** Kernel-space monitoring, <100μs latency, enforcement capable
+- **eBPF Mode:** Kernel-space monitoring, <100μs latency, enforcement (Planned)
 - **Auto-Fallback:** Automatically falls back to ETW if eBPF unavailable
 - **Supported APIs:** Process creation, File I/O, Network operations
 - **Monitoring:** Process, file, network events

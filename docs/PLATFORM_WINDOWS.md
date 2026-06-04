@@ -352,7 +352,7 @@ Get-NetFirewallRule -DisplayName "Warmor Metrics"
 
 ### Status: ✅ Implemented (Experimental)
 
-warmor now includes **full eBPF-for-Windows support** with automatic detection and graceful fallback to ETW.
+warmor includes **preliminary eBPF-for-Windows detection** with automatic fallback to ETW. Full eBPF enforcement support is planned for a future release.
 
 ### Architecture
 
