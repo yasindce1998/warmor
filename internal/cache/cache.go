@@ -108,17 +108,25 @@ func (c *DecisionCache) Stats() CacheStats {
 }
 
 func (c *DecisionCache) makeKey(event *api.Event) string {
-	// Key format: type:pid:uid:filename_hash
 	h := sha256.New()
-	h.Write([]byte(event.Filename))
-	hash := hex.EncodeToString(h.Sum(nil))[:16]
 
-	eventType := "unknown"
-	if event.Type != 0 {
-		eventType = event.Type.String()
+	switch event.GetType() {
+	case api.EventTypeFile:
+		if event.File != nil {
+			h.Write([]byte(event.File.Path))
+		} else {
+			h.Write([]byte(event.Filename))
+		}
+	case api.EventTypeNetwork:
+		if event.Network != nil {
+			fmt.Fprintf(h, "%s:%d", event.Network.RemoteAddr, event.Network.RemotePort)
+		}
+	default:
+		h.Write([]byte(event.Filename))
 	}
 
-	return fmt.Sprintf("%s:%d:%d:%s", eventType, event.PID, event.UID, hash)
+	hash := hex.EncodeToString(h.Sum(nil))[:16]
+	return fmt.Sprintf("%s:%d:%d:%s", event.GetType().String(), event.PID, event.UID, hash)
 }
 
 func (c *DecisionCache) evictOldest() {

@@ -52,9 +52,9 @@ if err != nil {
 }
 defer loader.Close()
 
-// Read events
+// Read process events (also: ReadFileEvent, ReadNetworkEvent)
 for {
-    event, err := loader.ReadEvent()
+    event, err := loader.ReadProcessEvent()
     if err != nil {
         log.Printf("Error: %v", err)
         continue
