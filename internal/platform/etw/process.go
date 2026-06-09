@@ -302,12 +302,28 @@ func StopProcessTracing(sessionHandle windows.Handle, sessionName string) error 
 	return nil
 }
 
+// filetimeToTime converts a Windows FILETIME value — 100-nanosecond intervals
+// since 1601-01-01 UTC, as carried in EVENT_HEADER.TimeStamp — to a time.Time.
+// Non-positive values (unset/raw) fall back to the current time.
+func filetimeToTime(ft int64) time.Time {
+	if ft <= 0 {
+		return time.Now()
+	}
+	const (
+		ticksPerSecond    = 10_000_000  // 100ns ticks in one second
+		epochDeltaSeconds = 11644473600 // seconds between 1601-01-01 and 1970-01-01 UTC
+	)
+	sec := ft/ticksPerSecond - epochDeltaSeconds
+	nsec := (ft % ticksPerSecond) * 100
+	return time.Unix(sec, nsec).UTC()
+}
+
 // ParseProcessEvent parses a process event from EVENT_RECORD
 func ParseProcessEvent(record *EVENT_RECORD) (*api.Event, error) {
 	event := &api.Event{
 		Type:      api.EventTypeProcess,
 		PID:       record.EventHeader.ProcessId,
-		Timestamp: time.Now(), // TODO: Convert EventHeader.TimeStamp
+		Timestamp: filetimeToTime(record.EventHeader.TimeStamp),
 	}
 
 	// Parse user data based on event ID

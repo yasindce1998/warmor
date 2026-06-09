@@ -5,7 +5,6 @@ package etw
 
 import (
 	"fmt"
-	"time"
 	"unsafe"
 
 	"github.com/yasindce1998/warmor/pkg/api"
@@ -130,10 +129,11 @@ func StopNetworkTracing(sessionHandle windows.Handle, sessionName string) error 
 
 // ParseNetworkEvent parses a network event from EVENT_RECORD
 func ParseNetworkEvent(record *EVENT_RECORD) (*api.Event, error) {
+	ts := filetimeToTime(record.EventHeader.TimeStamp)
 	event := &api.Event{
 		Type:      api.EventTypeNetwork,
 		PID:       record.EventHeader.ProcessId,
-		Timestamp: time.Now(), // TODO: Convert EventHeader.TimeStamp
+		Timestamp: ts,
 	}
 
 	// Create NetworkEvent
@@ -141,7 +141,7 @@ func ParseNetworkEvent(record *EVENT_RECORD) (*api.Event, error) {
 		BaseEvent: api.BaseEvent{
 			Type:      api.EventTypeNetwork,
 			PID:       record.EventHeader.ProcessId,
-			Timestamp: time.Now(),
+			Timestamp: ts,
 		},
 	}
 

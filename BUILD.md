@@ -71,10 +71,10 @@ This guide provides detailed instructions for building warmor from source.
 
 **Required Tools:**
 
-1. **Go 1.21+**
+1. **Go 1.26.2+**
    ```powershell
    go version
-   # Should output: go version go1.21 or higher
+   # Should output: go version go1.26.2 or higher
    ```
 
 2. **Rust 1.70+ with WASI target**
@@ -102,7 +102,7 @@ This guide provides detailed instructions for building warmor from source.
 
 **Required Tools:**
 
-1. **Go 1.21+**
+1. **Go 1.26.2+**
    ```bash
    go version
    ```
@@ -274,7 +274,7 @@ sudo ./warmor-daemon -policy policies/example/policy.wasm
 **First Run Setup:**
 1. Grant Full Disk Access: System Preferences → Security & Privacy → Privacy → Full Disk Access
 2. Approve System Extension when prompted
-3. Verify permissions: `sudo ./warmor-daemon --check-permissions`
+3. Verify: run `sudo ./warmor-daemon` — it logs a warning if Full Disk Access or System Extension approval is missing
 
 **Note:** See [macOS Platform Guide](docs/PLATFORM_MACOS.md) for detailed setup instructions.
 
@@ -542,10 +542,11 @@ Enforcer started, processing events...
 - **"ETW session already exists"** - Stop existing session: `logman stop "WarmorETWSession" -ets`
 - **No events appearing** - Check Event Viewer for ETW errors
 
-### macOS Tests (Stub)
+### macOS Tests (Beta)
 
 ```bash
-sudo ./warmor-darwin
+# Run as root (REQUIRED for ESF)
+sudo ./warmor-daemon
 ```
 
 Expected output:
@@ -554,12 +555,17 @@ Expected output:
 ║║║╠═╣╠╦╝║║║║ ║╠╦╝
 ╚╩╝╩ ╩╩╚═╩ ╩╚═╝╩╚═
 WASM-Powered Security Enforcer
-Version: 1.1.0-beta (STUB)
+Version: 1.1.0-beta
 
-⚠️  WARNING: macOS support is STUB ONLY
-⚠️  No actual monitoring implemented
-
-Platform: darwin (stub)
+macOS platform: Initializing Endpoint Security Framework
+Note: macOS support is EXPERIMENTAL/BETA
+Note: Requires Full Disk Access and System Extension approval
+✓ macOS platform loaded (ESF mode)
+Subscribing to process events...
+Subscribing to file events...
+Subscribing to network events...
+✓ macOS platform started successfully
+⚠️  Make sure to grant Full Disk Access in System Preferences
 ```
 
 ## Build Options

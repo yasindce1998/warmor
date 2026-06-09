@@ -2,6 +2,7 @@ package testing
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -18,6 +19,10 @@ type PolicyTest struct {
 
 // TestPolicy runs a series of tests against a policy
 func TestPolicy(t *testing.T, policyPath string, tests []PolicyTest) {
+	if _, err := os.Stat(policyPath); err != nil {
+		t.Skipf("policy artifact %q not found (build it with the policy's Makefile/cargo first): %v", policyPath, err)
+	}
+
 	ctx := context.Background()
 
 	// Load policy
@@ -54,6 +59,10 @@ func TestPolicy(t *testing.T, policyPath string, tests []PolicyTest) {
 
 // BenchmarkPolicy benchmarks policy evaluation performance
 func BenchmarkPolicy(b *testing.B, policyPath string, event *api.Event) {
+	if _, err := os.Stat(policyPath); err != nil {
+		b.Skipf("policy artifact %q not found (build it with the policy's Makefile/cargo first): %v", policyPath, err)
+	}
+
 	ctx := context.Background()
 
 	runtime, err := wasm.NewRuntime(ctx)

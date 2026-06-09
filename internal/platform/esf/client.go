@@ -29,15 +29,15 @@ import (
 
 // ESF Event Types
 const (
-	ES_EVENT_TYPE_AUTH_EXEC        = 0
-	ES_EVENT_TYPE_AUTH_OPEN        = 1
-	ES_EVENT_TYPE_AUTH_CREATE      = 2
-	ES_EVENT_TYPE_NOTIFY_EXEC      = 100
-	ES_EVENT_TYPE_NOTIFY_EXIT      = 101
-	ES_EVENT_TYPE_NOTIFY_FORK      = 102
-	ES_EVENT_TYPE_NOTIFY_WRITE     = 103
-	ES_EVENT_TYPE_NOTIFY_UNLINK    = 104
-	ES_EVENT_TYPE_NOTIFY_CONNECT   = 105
+	ES_EVENT_TYPE_AUTH_EXEC      = 0
+	ES_EVENT_TYPE_AUTH_OPEN      = 1
+	ES_EVENT_TYPE_AUTH_CREATE    = 2
+	ES_EVENT_TYPE_NOTIFY_EXEC    = 100
+	ES_EVENT_TYPE_NOTIFY_EXIT    = 101
+	ES_EVENT_TYPE_NOTIFY_FORK    = 102
+	ES_EVENT_TYPE_NOTIFY_WRITE   = 103
+	ES_EVENT_TYPE_NOTIFY_UNLINK  = 104
+	ES_EVENT_TYPE_NOTIFY_CONNECT = 105
 )
 
 // ESF Response Types
@@ -76,7 +76,7 @@ func (c *Client) Start(ctx context.Context, eventChan chan<- *api.Event) error {
 	// Create ESF client
 	var client *C.es_client_t
 	result := C.es_new_client(&client, C.goEventHandler)
-	
+
 	if result != C.ES_NEW_CLIENT_RESULT_SUCCESS {
 		return fmt.Errorf("failed to create ESF client: %d", result)
 	}
@@ -251,7 +251,7 @@ func (c *Client) isAuthEvent(eventType C.es_event_type_t) bool {
 // parseProcessEvent parses a process execution event
 func (c *Client) parseProcessEvent(message *C.es_message_t) (*api.Event, error) {
 	process := message.process
-	
+
 	event := &api.Event{
 		Type:      api.EventTypeProcess,
 		PID:       uint32(C.audit_token_to_pid(process.audit_token)),
@@ -273,7 +273,7 @@ func (c *Client) parseProcessEvent(message *C.es_message_t) (*api.Event, error) 
 // parseProcessExitEvent parses a process exit event
 func (c *Client) parseProcessExitEvent(message *C.es_message_t) (*api.Event, error) {
 	process := message.process
-	
+
 	event := &api.Event{
 		Type:      api.EventTypeProcess,
 		PID:       uint32(C.audit_token_to_pid(process.audit_token)),
@@ -293,7 +293,7 @@ func (c *Client) parseProcessExitEvent(message *C.es_message_t) (*api.Event, err
 // parseFileEvent parses a file operation event
 func (c *Client) parseFileEvent(message *C.es_message_t) (*api.Event, error) {
 	process := message.process
-	
+
 	event := &api.Event{
 		Type:      api.EventTypeFile,
 		PID:       uint32(C.audit_token_to_pid(process.audit_token)),
@@ -337,7 +337,7 @@ func (c *Client) parseFileEvent(message *C.es_message_t) (*api.Event, error) {
 // parseNetworkEvent parses a network connection event
 func (c *Client) parseNetworkEvent(message *C.es_message_t) (*api.Event, error) {
 	process := message.process
-	
+
 	event := &api.Event{
 		Type:      api.EventTypeNetwork,
 		PID:       uint32(C.audit_token_to_pid(process.audit_token)),
@@ -389,5 +389,3 @@ func goEventHandler(message *C.es_message_t) {
 	// For now, this is a placeholder
 	// In a real implementation, we'd store the client in a global map
 }
-
-

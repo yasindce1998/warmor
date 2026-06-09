@@ -34,9 +34,9 @@ func main() {
 	// Print banner
 	printBanner()
 
-	// Check for root privileges
-	if os.Geteuid() != 0 {
-		log.Fatal("❌ This program must be run as root (eBPF requires elevated privileges)")
+	// Check for elevated privileges (root on Unix, Administrator on Windows)
+	if !isElevated() {
+		log.Fatal("❌ This program must be run with elevated privileges (root on Linux/macOS, Administrator on Windows)")
 	}
 
 	log.Printf("Policy: %s", *policyPath)

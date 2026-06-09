@@ -475,7 +475,7 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 ## Technology Stack
 
 ### Core Technologies
-- **Go 1.21+** - Daemon implementation
+- **Go 1.26.2+** - Daemon implementation
 - **Rust 1.70+** - Policy implementation
 - **WASM** - Policy execution engine
 - **Wazero** - Pure Go WASM runtime

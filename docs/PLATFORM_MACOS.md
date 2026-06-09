@@ -114,7 +114,7 @@ id -u
 # Install Xcode Command Line Tools
 xcode-select --install
 
-# Install Go 1.21+
+# Install Go 1.26.2+
 brew install go
 
 # Install Rust 1.70+ (for WASM policies)
@@ -232,8 +232,8 @@ System Preferences → Security & Privacy → General
 
 **3. Verify Permissions:**
 ```bash
-# Check if warmor has Full Disk Access
-sudo ./warmor-daemon --check-permissions
+# Run warmor — it logs a warning if Full Disk Access or System Extension approval is missing
+sudo ./warmor-daemon
 ```
 
 ## Monitoring Capabilities
@@ -483,9 +483,6 @@ sudo ./warmor-daemon
 ```bash
 # Check ESF client status
 sudo lsof -c warmor-daemon | grep EndpointSecurity
-
-# Check permissions
-sudo ./warmor-daemon --check-permissions
 
 # Check logs
 log show --predicate 'process == "warmor-daemon"' --last 5m

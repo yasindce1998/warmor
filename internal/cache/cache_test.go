@@ -273,7 +273,7 @@ func TestDecisionCache_HitCount(t *testing.T) {
 	c.mu.RLock()
 	key := c.makeKey(event)
 	entry := c.entries[key]
-	hitCount := entry.HitCount
+	hitCount := entry.HitCount.Load()
 	c.mu.RUnlock()
 
 	if hitCount != 5 {

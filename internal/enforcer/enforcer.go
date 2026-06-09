@@ -8,16 +8,18 @@ import (
 	"time"
 
 	"github.com/yasindce1998/warmor/internal/cache"
-	"github.com/yasindce1998/warmor/internal/ebpf"
 	"github.com/yasindce1998/warmor/internal/logging"
 	"github.com/yasindce1998/warmor/internal/metrics"
+	"github.com/yasindce1998/warmor/internal/platform"
 	"github.com/yasindce1998/warmor/internal/wasm"
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
-// Enforcer integrates eBPF event capture with WASM policy evaluation
+// Enforcer integrates platform-specific event capture (eBPF/ETW/ESF) with
+// WASM policy evaluation.
 type Enforcer struct {
-	ebpfLoader    *ebpf.Loader
+	platform      platform.Platform
+	eventChan     chan *api.Event
 	wasmRuntime   *wasm.Runtime
 	evaluatorMu   sync.RWMutex
 	evaluator     *wasm.PolicyEvaluator
@@ -45,19 +47,23 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 	logger := logging.NewLogger("info")
 	logger.LogStartup(policyPath)
 
-	// Load eBPF program
-	logger.LogInfo("Loading eBPF program...")
-	ebpfLoader, err := ebpf.Load()
+	// Initialize the platform-specific monitor (eBPF on Linux, ETW on
+	// Windows, ESF on macOS).
+	plat, err := platform.New()
 	if err != nil {
-		return nil, fmt.Errorf("load eBPF: %w", err)
+		return nil, fmt.Errorf("initialize platform: %w", err)
 	}
-	logger.LogInfo("✓ eBPF program loaded")
+	logger.LogInfo(fmt.Sprintf("Loading %s platform monitor...", plat.Name()))
+	if err := plat.Load(ctx); err != nil {
+		return nil, fmt.Errorf("load platform: %w", err)
+	}
+	logger.LogInfo(fmt.Sprintf("✓ %s platform loaded", plat.Name()))
 
 	// Create WASM runtime
 	logger.LogInfo("Creating WASM runtime...")
 	wasmRuntime, err := wasm.NewRuntime(ctx)
 	if err != nil {
-		ebpfLoader.Close()
+		plat.Close()
 		return nil, fmt.Errorf("create WASM runtime: %w", err)
 	}
 	logger.LogInfo("✓ WASM runtime created")
@@ -66,7 +72,7 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 	logger.LogInfo(fmt.Sprintf("Loading policy from: %s", policyPath))
 	if err := wasmRuntime.LoadPolicy(ctx, policyPath); err != nil {
 		wasmRuntime.Close(ctx)
-		ebpfLoader.Close()
+		plat.Close()
 		return nil, fmt.Errorf("load policy: %w", err)
 	}
 	logger.LogInfo("✓ Policy loaded")
@@ -76,7 +82,7 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 	policy, err := wasm.NewPolicy(ctx, wasmRuntime)
 	if err != nil {
 		wasmRuntime.Close(ctx)
-		ebpfLoader.Close()
+		plat.Close()
 		return nil, fmt.Errorf("create policy: %w", err)
 	}
 	logger.LogInfo("✓ Policy instance created")
@@ -99,7 +105,7 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &Enforcer{
-		ebpfLoader:    ebpfLoader,
+		platform:      plat,
 		wasmRuntime:   wasmRuntime,
 		evaluator:     evaluator,
 		cache:         decisionCache,
@@ -119,6 +125,12 @@ func (e *Enforcer) Start() error {
 		return fmt.Errorf("start metrics server: %w", err)
 	}
 
+	// Start platform event capture, delivering into our channel.
+	e.eventChan = make(chan *api.Event, 1024)
+	if err := e.platform.Start(e.ctx, e.eventChan); err != nil {
+		return fmt.Errorf("start platform: %w", err)
+	}
+
 	// Start event processing
 	e.wg.Add(1)
 	go e.eventLoop()
@@ -127,55 +139,19 @@ func (e *Enforcer) Start() error {
 	return nil
 }
 
-// eventLoop processes events from eBPF and evaluates them with WASM
+// eventLoop consumes events delivered by the platform monitor and evaluates
+// them with the WASM policy.
 func (e *Enforcer) eventLoop() {
 	defer e.wg.Done()
-
-	backoff := 10 * time.Millisecond
-	maxBackoff := 5 * time.Second
-	consecutiveErrors := 0
 
 	for {
 		select {
 		case <-e.ctx.Done():
 			return
-		default:
-			// Read event from eBPF
-			ebpfEvent, err := e.ebpfLoader.ReadEvent()
-			if err != nil {
-				consecutiveErrors++
-				e.logger.LogError(err, "error reading event")
-				metrics.RecordProcessingError()
-
-				// Apply exponential backoff after multiple consecutive errors
-				if consecutiveErrors > 3 {
-					e.logger.LogInfo(fmt.Sprintf("Backing off for %v after %d consecutive errors", backoff, consecutiveErrors))
-					time.Sleep(backoff)
-					backoff = backoff * 2
-					if backoff > maxBackoff {
-						backoff = maxBackoff
-					}
-				}
-				continue
+		case event, ok := <-e.eventChan:
+			if !ok {
+				return
 			}
-
-			// Reset backoff on success
-			if consecutiveErrors > 0 {
-				consecutiveErrors = 0
-				backoff = 10 * time.Millisecond
-			}
-
-			// Convert to API event
-			event := &api.Event{
-				PID:       ebpfEvent.PID,
-				UID:       ebpfEvent.UID,
-				GID:       ebpfEvent.GID,
-				Comm:      ebpfEvent.Comm,
-				Filename:  ebpfEvent.Filename,
-				Timestamp: ebpfEvent.Timestamp,
-			}
-
-			// Handle the event
 			e.handleEvent(event)
 		}
 	}
@@ -343,10 +319,9 @@ func (e *Enforcer) Stop() {
 	e.logger.LogInfo("Stopping enforcer...")
 	e.cancel()
 
-	// Close eBPF loader to unblock ReadEvent
-	if e.ebpfLoader != nil {
-		e.ebpfLoader.Close()
-		e.ebpfLoader = nil
+	// Stop the platform monitor so it stops delivering events.
+	if e.platform != nil {
+		e.platform.Stop()
 	}
 
 	e.wg.Wait()
@@ -376,9 +351,9 @@ func (e *Enforcer) Close() error {
 	if runtime != nil {
 		runtime.Close(e.ctx)
 	}
-	if e.ebpfLoader != nil {
-		e.ebpfLoader.Close()
-		e.ebpfLoader = nil
+	if e.platform != nil {
+		e.platform.Close()
+		e.platform = nil
 	}
 
 	e.logger.LogInfo("✓ Resources cleaned up")

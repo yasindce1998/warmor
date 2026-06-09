@@ -265,7 +265,7 @@ This is typically addressed by the decision caching and event filtering implemen
 ## Next Steps
 
 1. **Experiment with policies** - Modify `policies/example/src/lib.rs`
-2. **Review the architecture** - See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+2. **Review the architecture** - See [docs/architecture.md](docs/architecture.md)
 3. **Check platform guides** - See platform-specific documentation in [docs/](docs/)
 4. **Explore policies** - Try other example policies: `policies/advanced`, `policies/cross-platform`, `policies/multi`
 
@@ -274,11 +274,11 @@ This is typically addressed by the decision caching and event filtering implemen
 - **Documentation**: See `docs/` directory
 - **GitHub Issues**: Report bugs and request features
 - **Architecture**: [docs/architecture.md](docs/architecture.md)
-- **Implementation Plan**: [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md)
+- **Project Status & Roadmap**: [docs/OVERVIEW.md](docs/OVERVIEW.md)
 
 ## Implementation Status
 
-### Phase 3 ✅ Complete
+### Phase 4 ✅ Complete
 
 **Core Features:**
 ✅ Cross-platform support (Linux, Windows, macOS)  
@@ -294,6 +294,6 @@ This is typically addressed by the decision caching and event filtering implemen
 
 ---
 
-**Version:** 1.1.0-beta (Phase 3 Complete)  
+**Version:** 1.1.0-beta (Phase 4 Complete)  
 **Last Updated:** 2026-06-02  
-**Status:** Cross-Platform Beta (Linux Production, Windows/macOS Experimental)
+**Status:** Cross-Platform Beta (Linux Production, Windows/macOS Beta)

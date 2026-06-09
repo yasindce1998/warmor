@@ -6,8 +6,8 @@ package etw
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
-	"time"
 
 	"github.com/yasindce1998/warmor/pkg/api"
 	"golang.org/x/sys/windows"
@@ -82,9 +82,14 @@ func (c *Consumer) Start(ctx context.Context, eventChan chan<- *api.Event) error
 	c.eventChan = eventChan
 	c.mu.Unlock()
 
-	// Start process monitoring
-	c.wg.Add(1)
-	go c.consumeProcessEvents(ctx)
+	// NOTE: Live ETW event consumption is not yet implemented. The real-time
+	// pipeline requires StartTrace + EnableTraceEx2 (see StartProcessTracing in
+	// process.go) followed by an OpenTrace/ProcessTrace consume loop whose
+	// callback parses each EVENT_RECORD via TDH (see ParseProcessEvent et al.).
+	// Until that is wired up the consumer deliberately delivers no events rather
+	// than fabricating synthetic ones.
+	_ = ctx
+	log.Println("⚠ ETW live event consumption is not yet implemented; no events will be delivered")
 
 	return nil
 }
@@ -111,145 +116,26 @@ func (c *Consumer) Stop() error {
 	return nil
 }
 
-// consumeProcessEvents consumes process creation/termination events
-func (c *Consumer) consumeProcessEvents(ctx context.Context) {
-	defer c.wg.Done()
-
-	// For now, we'll use a simplified approach with WMI-like polling
-	// Full ETW implementation requires complex Win32 API calls
-	// This is a placeholder that demonstrates the structure
-
-	// TODO: Implement full ETW session with:
-	// 1. StartTrace() to create session
-	// 2. EnableTraceEx2() to enable provider
-	// 3. ProcessTrace() to consume events
-	// 4. Event parsing and conversion
-
-	// Placeholder: Generate test events
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-c.stopChan:
-			return
-		case <-ticker.C:
-			// Simulated ETW polling
-			event := &api.Event{
-				Type:      api.EventTypeProcess,
-				PID:       1234,
-				UID:       1000,
-				Comm:      "test.exe",
-				Filename:  "C:\\Windows\\System32\\test.exe",
-				Timestamp: time.Now(),
-			}
-
-			select {
-			case c.eventChan <- event:
-			case <-ctx.Done():
-				return
-			case <-c.stopChan:
-				return
-			}
-		}
-	}
-}
-
-// EnableProcessMonitoring enables process event monitoring
+// EnableProcessMonitoring enables process event monitoring.
+//
+// Provider enablement (EnableTraceEx2 with ProcessProviderGUID) is performed as
+// part of the not-yet-implemented live consume loop; this is currently a no-op.
 func (c *Consumer) EnableProcessMonitoring() error {
-	// TODO: Call EnableTraceEx2 with ProcessProviderGUID
 	return nil
 }
 
-// EnableFileMonitoring enables file event monitoring
+// EnableFileMonitoring enables file event monitoring.
+//
+// See EnableProcessMonitoring — provider enablement is pending the live consume
+// loop; this is currently a no-op.
 func (c *Consumer) EnableFileMonitoring() error {
-	// TODO: Call EnableTraceEx2 with FileProviderGUID
 	return nil
 }
 
-// EnableNetworkMonitoring enables network event monitoring
+// EnableNetworkMonitoring enables network event monitoring.
+//
+// See EnableProcessMonitoring — provider enablement is pending the live consume
+// loop; this is currently a no-op.
 func (c *Consumer) EnableNetworkMonitoring() error {
-	// TODO: Call EnableTraceEx2 with NetworkProviderGUID
 	return nil
-}
-
-// Helper functions for ETW API calls (to be implemented)
-
-// startTraceSession starts an ETW trace session
-func startTraceSession(sessionName string) (uintptr, error) {
-	// TODO: Implement using StartTrace Win32 API
-	// This requires:
-	// 1. Allocate EVENT_TRACE_PROPERTIES structure
-	// 2. Call StartTrace()
-	// 3. Return session handle
-	return 0, fmt.Errorf("not implemented")
-}
-
-// enableProvider enables an ETW provider
-func enableProvider(sessionHandle uintptr, providerGUID windows.GUID) error {
-	// TODO: Implement using EnableTraceEx2 Win32 API
-	return fmt.Errorf("not implemented")
-}
-
-// processTrace processes ETW events
-func processTrace(sessionHandle uintptr, callback func(*EventRecord)) error {
-	// TODO: Implement using ProcessTrace Win32 API
-	// This requires:
-	// 1. Set up EVENT_TRACE_LOGFILE structure
-	// 2. Call OpenTrace()
-	// 3. Call ProcessTrace() in loop
-	// 4. Parse EVENT_RECORD structures
-	return fmt.Errorf("not implemented")
-}
-
-// EventRecord represents a parsed ETW event
-type EventRecord struct {
-	EventHeader EventHeader
-	UserData    []byte
-}
-
-// EventHeader contains event metadata
-type EventHeader struct {
-	Size          uint16
-	HeaderType    uint16
-	Flags         uint16
-	EventProperty uint16
-	ThreadId      uint32
-	ProcessId     uint32
-	TimeStamp     int64
-	ProviderId    windows.GUID
-	EventId       uint16
-	Version       uint8
-	Channel       uint8
-	Level         uint8
-	Opcode        uint8
-	Task          uint16
-	Keyword       uint64
-}
-
-// parseProcessEvent parses a process creation/termination event
-func parseProcessEvent(record *EventRecord) (*api.Event, error) {
-	// TODO: Parse EVENT_RECORD UserData based on event type
-	// Process events contain:
-	// - ProcessId
-	// - ParentProcessId
-	// - SessionId
-	// - ImageFileName
-	// - CommandLine
-	// - UserSID
-	return nil, fmt.Errorf("not implemented")
-}
-
-// parseFileEvent parses a file operation event
-func parseFileEvent(record *EventRecord) (*api.Event, error) {
-	// TODO: Parse file event data
-	return nil, fmt.Errorf("not implemented")
-}
-
-// parseNetworkEvent parses a network event
-func parseNetworkEvent(record *EventRecord) (*api.Event, error) {
-	// TODO: Parse network event data
-	return nil, fmt.Errorf("not implemented")
 }

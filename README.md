@@ -78,16 +78,16 @@ Application → Platform Hook (eBPF/ESF/KMD) → warmor Daemon → WASM Policy �
 - **Clang/LLVM** (for compiling eBPF programs)
 
 **Windows (Beta/Experimental):**
-- **Go 1.21+**
+- **Go 1.26.2+**
 - **Rust 1.70+** (for building policies)
 - **Windows 10 1809+** or **Windows 11**
 - **Administrator privileges** (for ETW/eBPF)
-- **Optional:** eBPF-for-Windows (for eBPF mode with enforcement)
+- **Optional:** eBPF-for-Windows (detected automatically; eBPF-mode enforcement is planned, not yet implemented)
 - **Optional:** LLVM/Clang (for compiling eBPF programs)
 - See [Windows Platform Guide](docs/PLATFORM_WINDOWS.md) for details
 
 **macOS (Beta/Experimental):**
-- **Go 1.21+**
+- **Go 1.26.2+**
 - **Rust 1.70+** (for building policies)
 - **macOS 10.15+** (Catalina or later)
 - **Xcode Command Line Tools**
@@ -221,7 +221,7 @@ Cache Size: 245/10000
 
 ### General
 - **[Getting Started](GETTING_STARTED.md)** - Build and run warmor
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and components
+- **[Architecture](docs/architecture.md)** - System design and components
 - **[Project Overview](docs/OVERVIEW.md)** - Current status and roadmap
 - **[PRD](docs/PRD.md)** - Complete product requirements
 
@@ -309,9 +309,9 @@ Cache Size: 245/10000
   - Linux: ✅ Production Ready (eBPF)
     - Full eBPF integration with comprehensive testing
     - Process, file, network monitoring
-  - Windows: 🚧 Beta (ETW + eBPF-for-Windows)
-    - ETW-based monitoring with automatic fallback
-    - eBPF-for-Windows support for enforcement
+  - Windows: 🚧 Beta (ETW; eBPF-for-Windows detection)
+    - ETW-based monitoring only (no enforcement)
+    - eBPF-for-Windows detection with automatic ETW fallback (eBPF enforcement planned)
     - See [Windows Guide](docs/PLATFORM_WINDOWS.md)
   - macOS: 🚧 Beta (ESF)
     - Endpoint Security Framework integration
@@ -399,7 +399,7 @@ warmor/
 │       └── warmor.entitlements
 ├── scripts/               # Build and setup scripts
 ├── docs/                  # Documentation
-│   ├── ARCHITECTURE.md    # System architecture
+│   ├── architecture.md    # System architecture
 │   ├── PRD.md             # Product requirements
 │   ├── OVERVIEW.md        # Project status
 │   ├── PLATFORM_LINUX.md  # Linux guide
@@ -420,7 +420,7 @@ warmor/
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Open an [issue](https://github.com/yasindce1998/warmor/issues) or pull request to get involved.
 
 ### Areas We Need Help
 

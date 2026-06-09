@@ -113,7 +113,7 @@ if %errorLevel% == 0 (
 
 ### Build Dependencies
 ```powershell
-# Install Go 1.21+
+# Install Go 1.26.2+
 winget install GoLang.Go
 
 # Install Rust 1.70+ (for WASM policies)

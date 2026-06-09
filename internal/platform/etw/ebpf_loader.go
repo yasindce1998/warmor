@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"time"
 	"unsafe"
 
 	"github.com/yasindce1998/warmor/pkg/api"
@@ -287,20 +286,16 @@ func (l *EBPFLoader) detachProgram(program windows.Handle) error {
 	return nil
 }
 
-// processEvents reads events from the perf event array
+// processEvents reads events from the perf event array.
+//
+// A real implementation would set up perf event buffers, poll for events
+// (IOCP), parse the event payloads, convert them to api.Event, and send them on
+// eventChan. That work is not yet implemented; until it is, no events are
+// delivered (rather than fabricating synthetic ones). Block until stopped.
 func (l *EBPFLoader) processEvents(ctx context.Context) {
 	defer l.wg.Done()
 
-	// In a real implementation, this would:
-	// 1. Set up perf event buffers
-	// 2. Poll for events using epoll/IOCP
-	// 3. Parse event data
-	// 4. Convert to api.Event
-	// 5. Send to eventChan
-
-	// Placeholder: Generate test events
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
+	log.Println("⚠ eBPF-for-Windows event processing is not yet implemented; no events will be delivered")
 
 	for {
 		select {
@@ -308,25 +303,6 @@ func (l *EBPFLoader) processEvents(ctx context.Context) {
 			return
 		case <-l.stopChan:
 			return
-		case <-ticker.C:
-			// Placeholder event from eBPF
-			event := &api.Event{
-				Type:      api.EventTypeProcess,
-				PID:       1234,
-				UID:       1000,
-				GID:       1000,
-				Comm:      "ebpf_test.exe",
-				Filename:  "C:\\Windows\\System32\\ebpf_test.exe",
-				Timestamp: time.Now(),
-			}
-
-			select {
-			case l.eventChan <- event:
-			case <-ctx.Done():
-				return
-			case <-l.stopChan:
-				return
-			}
 		}
 	}
 }
