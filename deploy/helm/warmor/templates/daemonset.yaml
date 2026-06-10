@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "warmor.fullname" . }}
+  labels:
+    {{- include "warmor.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "warmor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/policy: {{ .Values.policy.yaml | sha256sum }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.daemon.metricsPort | quote }}
+        prometheus.io/path: "/metrics"
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "warmor.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "warmor.serviceAccountName" . }}
+      hostPID: true
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: compile-policy
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/warmor-daemon"]
+          args: ["--version"]
+          volumeMounts:
+            - name: policy
+              mountPath: /etc/warmor
+      containers:
+        - name: warmor
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - "-policy"
+            - "/etc/warmor/policy.yaml"
+            - "-metrics-port"
+            - {{ .Values.daemon.metricsPort | quote }}
+            - "-log-level"
+            - {{ .Values.daemon.logLevel | quote }}
+            - "-stats-interval"
+            - {{ .Values.daemon.statsInterval | quote }}
+          securityContext:
+            privileged: true
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.daemon.metricsPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: policy
+              mountPath: /etc/warmor
+            - name: host-proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: host-sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: bpf
+              mountPath: /sys/fs/bpf
+      volumes:
+        - name: policy
+          configMap:
+            name: {{ include "warmor.fullname" . }}-policy
+        - name: host-proc
+          hostPath:
+            path: /proc
+        - name: host-sys
+          hostPath:
+            path: /sys
+        - name: bpf
+          hostPath:
+            path: /sys/fs/bpf
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

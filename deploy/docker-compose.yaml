@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  warmor:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    privileged: true
+    ports:
+      - "9090:9090"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/warmor-dashboard.json:/var/lib/grafana/dashboards/warmor.json:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/warmor.json
+    restart: unless-stopped

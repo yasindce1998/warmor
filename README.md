@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26.2+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Phase%204%20Complete-brightgreen)](docs/OVERVIEW.md)
+[![Status](https://img.shields.io/badge/Status-Phase%204%20In%20Progress-yellow)](docs/OVERVIEW.md)
 [![Windows](https://img.shields.io/badge/Windows-Beta%2FETW%2BeBPF-yellow)](docs/PLATFORM_WINDOWS.md)
 [![Linux](https://img.shields.io/badge/Linux-Production-brightgreen)](docs/PLATFORM_LINUX.md)
 [![macOS](https://img.shields.io/badge/macOS-Beta%2FESF-yellow)](docs/PLATFORM_MACOS.md)

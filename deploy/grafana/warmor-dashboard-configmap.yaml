@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: warmor-grafana-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: warmor
+    app.kubernetes.io/component: monitoring
+  annotations:
+    grafana-folder: "Security"
+# Apply with:
+#   kubectl create configmap warmor-grafana-dashboard \
+#     --from-file=warmor-dashboard.json=deploy/grafana/warmor-dashboard.json \
+#     -n monitoring -o yaml --dry-run=client | \
+#     kubectl label --local -f - grafana_dashboard=1 -o yaml | \
+#     kubectl apply -f -
+#
+# Or if using the Helm chart, set grafana.dashboardEnabled=true in values.yaml.

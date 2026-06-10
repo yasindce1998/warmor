@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+	"github.com/yasindce1998/warmor/internal/compiler"
 )
 
 // Runtime wraps the WASM runtime
@@ -49,6 +52,39 @@ func (r *Runtime) LoadPolicy(ctx context.Context, path string) error {
 
 	r.module = compiled
 	return nil
+}
+
+// LoadPolicyFromYAML compiles a YAML policy to WASM and loads it.
+// If a pre-compiled .wasm file exists next to the .yaml with the same base name,
+// it is loaded directly. Otherwise the YAML is compiled via the Rust toolchain.
+func (r *Runtime) LoadPolicyFromYAML(ctx context.Context, yamlPath string) error {
+	ext := filepath.Ext(yamlPath)
+	wasmPath := strings.TrimSuffix(yamlPath, ext) + ".wasm"
+
+	if _, err := os.Stat(wasmPath); err == nil {
+		return r.LoadPolicy(ctx, wasmPath)
+	}
+
+	policy, err := compiler.ParseFile(yamlPath)
+	if err != nil {
+		return fmt.Errorf("parse YAML policy: %w", err)
+	}
+
+	result, err := compiler.Build(policy, compiler.BuildOptions{
+		OutputPath: wasmPath,
+	})
+	if err != nil {
+		return fmt.Errorf("compile YAML policy: %w", err)
+	}
+	compiler.Cleanup(result)
+
+	return r.LoadPolicy(ctx, wasmPath)
+}
+
+// IsYAMLPolicy returns true if the path has a .yaml or .yml extension.
+func IsYAMLPolicy(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".yaml" || ext == ".yml"
 }
 
 // Close cleans up the runtime

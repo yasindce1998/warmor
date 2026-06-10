@@ -1,0 +1,73 @@
+image:
+  repository: ghcr.io/yasindce1998/warmor
+  tag: ""
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+daemon:
+  logLevel: info
+  statsInterval: 30s
+  metricsPort: 9090
+
+policy:
+  yaml: |
+    name: cluster-default
+    version: 1
+    description: "Default cluster security policy"
+    variables:
+      blocked_bins:
+        - "/usr/bin/nc"
+        - "/usr/bin/ncat"
+        - "/usr/bin/socat"
+    rules:
+      - name: block-tmp-exec
+        event: process
+        conditions:
+          all:
+            - path: { glob: "/tmp/**" }
+        action: deny
+        reason: "Execution from temp directory"
+      - name: block-network-tools
+        event: process
+        conditions:
+          all:
+            - uid: { not: 0 }
+            - path: { any_of: $blocked_bins }
+        action: deny
+        reason: "Blocked network tool"
+    default_action: allow
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+tolerations:
+  - operator: Exists
+
+nodeSelector: {}
+
+affinity: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapeTimeout: 10s
+  additionalLabels: {}
+
+grafana:
+  dashboardEnabled: false

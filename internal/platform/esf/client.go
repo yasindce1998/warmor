@@ -1,5 +1,4 @@
 //go:build darwin
-// +build darwin
 
 package esf
 
@@ -7,13 +6,36 @@ package esf
 #cgo LDFLAGS: -framework EndpointSecurity -framework Foundation
 #include <EndpointSecurity/EndpointSecurity.h>
 #include <stdlib.h>
+#include <mach/mach_time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 // Callback function that will be called from Go
 extern void goEventHandler(es_message_t *message);
 
-// C wrapper to set up the event handler
-static void setup_event_handler(es_client_t *client) {
-    // This will be implemented in the C bridge
+// Helper to get mach timebase info for time conversion
+static void get_timebase_info(uint32_t *numer, uint32_t *denom) {
+    mach_timebase_info_data_t info;
+    mach_timebase_info(&info);
+    *numer = info.numer;
+    *denom = info.denom;
+}
+
+// Accessors for union fields that Go's CGo cannot access directly
+static es_file_t* get_create_destination_existing_file(es_message_t *msg) {
+    return msg->event.create.destination.existing_file;
+}
+
+static es_file_t* get_write_target(es_message_t *msg) {
+    return msg->event.write.target;
+}
+
+static es_file_t* get_unlink_target(es_message_t *msg) {
+    return msg->event.unlink.target->path.data ? msg->event.unlink.target : NULL;
+}
+
+static struct sockaddr* get_connect_address(es_message_t *msg) {
+    return (struct sockaddr*)&msg->event.connect.address;
 }
 */
 import "C"
@@ -21,10 +43,38 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/yasindce1998/warmor/pkg/api"
+)
+
+// Global client registry for CGo callback routing.
+// ESF delivers events via a C function pointer that cannot carry Go state.
+var (
+	globalClientMu sync.RWMutex
+	globalClient   *Client
+)
+
+func registerClient(c *Client) {
+	globalClientMu.Lock()
+	globalClient = c
+	globalClientMu.Unlock()
+}
+
+func unregisterClient() {
+	globalClientMu.Lock()
+	globalClient = nil
+	globalClientMu.Unlock()
+}
+
+// Mach timebase info (initialized once at startup)
+var (
+	timebaseNumer uint32
+	timebaseDenom uint32
+	timebaseOnce  sync.Once
 )
 
 // ESF Event Types
@@ -84,7 +134,9 @@ func (c *Client) Start(ctx context.Context, eventChan chan<- *api.Event) error {
 	c.client = client
 	c.running = true
 
-	log.Println("✓ ESF client created successfully")
+	registerClient(c)
+
+	log.Println("ESF: client created successfully")
 	return nil
 }
 
@@ -97,6 +149,8 @@ func (c *Client) Stop() error {
 		return nil
 	}
 
+	unregisterClient()
+
 	close(c.stopChan)
 	c.wg.Wait()
 
@@ -106,7 +160,7 @@ func (c *Client) Stop() error {
 	}
 
 	c.running = false
-	log.Println("✓ ESF client stopped")
+	log.Println("ESF: client stopped")
 	return nil
 }
 
@@ -320,14 +374,20 @@ func (c *Client) parseFileEvent(message *C.es_message_t) (*api.Event, error) {
 			fileEvent.Operation = "open"
 		}
 	case C.ES_EVENT_TYPE_AUTH_CREATE:
-		// TODO: Extract path from create event
 		fileEvent.Operation = "create"
+		if f := C.get_create_destination_existing_file(message); f != nil && f.path.data != nil {
+			fileEvent.Path = C.GoString(f.path.data)
+		}
 	case C.ES_EVENT_TYPE_NOTIFY_WRITE:
-		// TODO: Extract path from write event
 		fileEvent.Operation = "write"
+		if f := C.get_write_target(message); f != nil && f.path.data != nil {
+			fileEvent.Path = C.GoString(f.path.data)
+		}
 	case C.ES_EVENT_TYPE_NOTIFY_UNLINK:
-		// TODO: Extract path from unlink event
 		fileEvent.Operation = "delete"
+		if f := C.get_unlink_target(message); f != nil && f.path.data != nil {
+			fileEvent.Path = C.GoString(f.path.data)
+		}
 	}
 
 	event.File = fileEvent
@@ -357,8 +417,26 @@ func (c *Client) parseNetworkEvent(message *C.es_message_t) (*api.Event, error) 
 		Operation: "connect",
 	}
 
-	// TODO: Extract network details from connect event
-	// This requires parsing sockaddr structures
+	// Extract sockaddr from connect event
+	sa := C.get_connect_address(message)
+	if sa != nil {
+		switch sa.sa_family {
+		case C.AF_INET:
+			sin := (*C.struct_sockaddr_in)(unsafe.Pointer(sa))
+			port := uint16(C.ntohs(sin.sin_port))
+			addr := net.IP(C.GoBytes(unsafe.Pointer(&sin.sin_addr), 4))
+			networkEvent.RemoteAddr = addr.String()
+			networkEvent.RemotePort = port
+			networkEvent.Protocol = "tcp"
+		case C.AF_INET6:
+			sin6 := (*C.struct_sockaddr_in6)(unsafe.Pointer(sa))
+			port := uint16(C.ntohs(sin6.sin6_port))
+			addr := net.IP(C.GoBytes(unsafe.Pointer(&sin6.sin6_addr), 16))
+			networkEvent.RemoteAddr = addr.String()
+			networkEvent.RemotePort = port
+			networkEvent.Protocol = "tcp"
+		}
+	}
 
 	event.Network = networkEvent
 	return event, nil
@@ -366,10 +444,17 @@ func (c *Client) parseNetworkEvent(message *C.es_message_t) (*api.Event, error) 
 
 // Helper functions
 
-func convertESTime(esTime C.uint64_t) int64 {
-	// Convert ESF time (Mach absolute time) to Unix timestamp
-	// This is a simplified conversion
-	return int64(esTime)
+func convertESTime(esTime C.uint64_t) time.Time {
+	timebaseOnce.Do(func() {
+		var numer, denom C.uint32_t
+		C.get_timebase_info(&numer, &denom)
+		timebaseNumer = uint32(numer)
+		timebaseDenom = uint32(denom)
+	})
+
+	// Convert Mach absolute time to nanoseconds
+	nanos := uint64(esTime) * uint64(timebaseNumer) / uint64(timebaseDenom)
+	return time.Unix(0, int64(nanos))
 }
 
 func extractCommFromPath(path string) string {
@@ -384,8 +469,11 @@ func extractCommFromPath(path string) string {
 
 //export goEventHandler
 func goEventHandler(message *C.es_message_t) {
-	// This function is called from C
-	// We need to get the client instance and call handleEvent
-	// For now, this is a placeholder
-	// In a real implementation, we'd store the client in a global map
+	globalClientMu.RLock()
+	c := globalClient
+	globalClientMu.RUnlock()
+	if c == nil {
+		return
+	}
+	c.handleEvent(message)
 }

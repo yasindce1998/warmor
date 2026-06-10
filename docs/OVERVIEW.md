@@ -155,14 +155,15 @@ warmor is a **cross-platform WASM-powered security enforcer** that solves the "P
 - [x] Performance optimization via caching and batching
 - [x] CPU overhead <5% on typical workloads
 
-### Phase 4: Cross-Platform Support ✅ COMPLETE
-- [x] Windows implementation (ETW + eBPF-for-Windows)
-- [x] macOS implementation (Endpoint Security Framework)
+### Phase 4: Cross-Platform Support 🚧 IN PROGRESS
 - [x] Platform abstraction layer
 - [x] Unified policy format across platforms
 - [x] Cross-platform CLI tool
 - [x] Platform-specific documentation
-- [x] Comprehensive project overview and status
+- [x] Windows ETW consume loop (event delivery wired up)
+- [ ] Windows ETW event parsing (process binary data TODO)
+- [ ] macOS ESF callback routing (goEventHandler placeholder)
+- [ ] Platform-specific event delivery verified end-to-end
 
 ### Phase 5: Production Readiness 🚧 IN PROGRESS
 - [x] Structured logging with zerolog

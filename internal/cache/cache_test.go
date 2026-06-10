@@ -404,6 +404,185 @@ func TestDecisionCache_DifferentKeys(t *testing.T) {
 	}
 }
 
+func TestDecisionCache_MakeKey_FileEvent(t *testing.T) {
+	c := NewDecisionCache(10, 5*time.Minute)
+
+	// File event with File sub-struct — key should use File.Path
+	fileEvent := &api.Event{
+		PID:  1234,
+		UID:  1000,
+		Type: api.EventTypeFile,
+		File: &api.FileEvent{
+			Path: "/etc/passwd",
+		},
+	}
+	key1 := c.makeKey(fileEvent)
+
+	// Same path, different PID — different key
+	fileEvent2 := &api.Event{
+		PID:  5678,
+		UID:  1000,
+		Type: api.EventTypeFile,
+		File: &api.FileEvent{
+			Path: "/etc/passwd",
+		},
+	}
+	key2 := c.makeKey(fileEvent2)
+	if key1 == key2 {
+		t.Error("different PIDs should produce different keys")
+	}
+
+	// Different path — different key
+	fileEvent3 := &api.Event{
+		PID:  1234,
+		UID:  1000,
+		Type: api.EventTypeFile,
+		File: &api.FileEvent{
+			Path: "/etc/shadow",
+		},
+	}
+	key3 := c.makeKey(fileEvent3)
+	if key1 == key3 {
+		t.Error("different paths should produce different keys")
+	}
+
+	// File.Path takes priority over legacy Filename field
+	fileEventLegacy := &api.Event{
+		PID:      1234,
+		UID:      1000,
+		Type:     api.EventTypeFile,
+		Filename: "/etc/passwd",
+	}
+	keyLegacy := c.makeKey(fileEventLegacy)
+	// Without File sub-struct, falls through to Filename
+	// With File sub-struct, uses File.Path — both resolve to same content here
+	if key1 != keyLegacy {
+		t.Error("File.Path and Filename with same value should produce same key")
+	}
+
+	// File event with nil File falls back to Filename
+	fileEventNilFile := &api.Event{
+		PID:      1234,
+		UID:      1000,
+		Type:     api.EventTypeFile,
+		Filename: "/tmp/other",
+	}
+	keyNilFile := c.makeKey(fileEventNilFile)
+	if key1 == keyNilFile {
+		t.Error("different fallback filename should produce different key")
+	}
+}
+
+func TestDecisionCache_MakeKey_NetworkEvent(t *testing.T) {
+	c := NewDecisionCache(10, 5*time.Minute)
+
+	netEvent := &api.Event{
+		PID:  1234,
+		UID:  1000,
+		Type: api.EventTypeNetwork,
+		Network: &api.NetworkEvent{
+			RemoteAddr: "192.168.1.1",
+			RemotePort: 443,
+		},
+	}
+	key1 := c.makeKey(netEvent)
+
+	// Different remote addr — different key
+	netEvent2 := &api.Event{
+		PID:  1234,
+		UID:  1000,
+		Type: api.EventTypeNetwork,
+		Network: &api.NetworkEvent{
+			RemoteAddr: "10.0.0.1",
+			RemotePort: 443,
+		},
+	}
+	key2 := c.makeKey(netEvent2)
+	if key1 == key2 {
+		t.Error("different remote addresses should produce different keys")
+	}
+
+	// Different remote port — different key
+	netEvent3 := &api.Event{
+		PID:  1234,
+		UID:  1000,
+		Type: api.EventTypeNetwork,
+		Network: &api.NetworkEvent{
+			RemoteAddr: "192.168.1.1",
+			RemotePort: 80,
+		},
+	}
+	key3 := c.makeKey(netEvent3)
+	if key1 == key3 {
+		t.Error("different remote ports should produce different keys")
+	}
+
+	// Same addr+port, different PID — different key
+	netEvent4 := &api.Event{
+		PID:  9999,
+		UID:  1000,
+		Type: api.EventTypeNetwork,
+		Network: &api.NetworkEvent{
+			RemoteAddr: "192.168.1.1",
+			RemotePort: 443,
+		},
+	}
+	key4 := c.makeKey(netEvent4)
+	if key1 == key4 {
+		t.Error("different PIDs should produce different keys")
+	}
+
+	// Consistent — same event produces same key
+	key1Again := c.makeKey(netEvent)
+	if key1 != key1Again {
+		t.Error("makeKey should be deterministic")
+	}
+}
+
+func TestDecisionCache_MakeKey_CrossType(t *testing.T) {
+	c := NewDecisionCache(10, 5*time.Minute)
+
+	// Process event using Filename
+	processEvent := &api.Event{
+		PID:      1234,
+		UID:      1000,
+		Type:     api.EventTypeProcess,
+		Filename: "/bin/bash",
+	}
+
+	// File event using the same path string
+	fileEvent := &api.Event{
+		PID:  1234,
+		UID:  1000,
+		Type: api.EventTypeFile,
+		File: &api.FileEvent{
+			Path: "/bin/bash",
+		},
+	}
+
+	keyProcess := c.makeKey(processEvent)
+	keyFile := c.makeKey(fileEvent)
+
+	if keyProcess == keyFile {
+		t.Error("process and file events with same path should have different keys (type prefix differs)")
+	}
+
+	// Network event — totally different key structure
+	netEvent := &api.Event{
+		PID:  1234,
+		UID:  1000,
+		Type: api.EventTypeNetwork,
+		Network: &api.NetworkEvent{
+			RemoteAddr: "127.0.0.1",
+			RemotePort: 8080,
+		},
+	}
+	keyNet := c.makeKey(netEvent)
+	if keyNet == keyProcess || keyNet == keyFile {
+		t.Error("network event key should differ from process and file keys")
+	}
+}
+
 func BenchmarkDecisionCache_Put(b *testing.B) {
 	c := NewDecisionCache(10000, 5*time.Minute)
 	result := &api.ActionResult{

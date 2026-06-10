@@ -1,0 +1,76 @@
+name: example-security-policy
+version: 1
+description: "Example warmor YAML policy demonstrating all condition types"
+
+variables:
+  blocked_bins:
+    - "/usr/bin/nc"
+    - "/usr/bin/ncat"
+    - "/usr/bin/socat"
+    - "/usr/bin/curl"
+  sensitive_ports:
+    - 22
+    - 23
+    - 3389
+    - 4444
+    - 5900
+  temp_dirs:
+    - "/tmp/**"
+    - "/var/tmp/**"
+    - "/private/tmp/**"
+
+rules:
+  - name: block-tmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    action: deny
+    reason: "Execution from temp directory"
+
+  - name: block-vartmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/var/tmp/**" }
+    action: deny
+    reason: "Execution from /var/tmp"
+
+  - name: block-network-tools
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $blocked_bins }
+    action: deny
+    reason: "Blocked network reconnaissance tool"
+
+  - name: log-sensitive-ports
+    event: network
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - remote_port: { any_of: $sensitive_ports }
+    action: log
+    reason: "Connection to sensitive port"
+
+  - name: block-etc-write
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { glob: "/etc/**" }
+        - operation: { any_of: ["write", "unlink"] }
+    action: deny
+    reason: "Write to /etc by non-root user"
+
+  - name: log-ssh-config-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/**/.ssh/**" }
+        - operation: "read"
+    action: log
+    reason: "SSH key access"
+
+default_action: allow

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "warmor.fullname" . }}-metrics
+  labels:
+    {{- include "warmor.labels" . | nindent 4 }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: {{ .Values.daemon.metricsPort | quote }}
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: metrics
+      port: {{ .Values.daemon.metricsPort }}
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    {{- include "warmor.selectorLabels" . | nindent 4 }}

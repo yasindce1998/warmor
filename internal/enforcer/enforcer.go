@@ -68,12 +68,21 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 	}
 	logger.LogInfo("✓ WASM runtime created")
 
-	// Load policy
+	// Load policy (supports both .wasm and .yaml/.yml)
 	logger.LogInfo(fmt.Sprintf("Loading policy from: %s", policyPath))
-	if err := wasmRuntime.LoadPolicy(ctx, policyPath); err != nil {
-		wasmRuntime.Close(ctx)
-		plat.Close()
-		return nil, fmt.Errorf("load policy: %w", err)
+	if wasm.IsYAMLPolicy(policyPath) {
+		logger.LogInfo("Detected YAML policy, compiling...")
+		if err := wasmRuntime.LoadPolicyFromYAML(ctx, policyPath); err != nil {
+			wasmRuntime.Close(ctx)
+			plat.Close()
+			return nil, fmt.Errorf("load YAML policy: %w", err)
+		}
+	} else {
+		if err := wasmRuntime.LoadPolicy(ctx, policyPath); err != nil {
+			wasmRuntime.Close(ctx)
+			plat.Close()
+			return nil, fmt.Errorf("load policy: %w", err)
+		}
 	}
 	logger.LogInfo("✓ Policy loaded")
 
@@ -273,10 +282,17 @@ func (e *Enforcer) ReloadPolicy() error {
 		return fmt.Errorf("create new runtime: %w", err)
 	}
 
-	// Load new policy
-	if err := newRuntime.LoadPolicy(e.ctx, e.policyPath); err != nil {
-		newRuntime.Close(e.ctx)
-		return fmt.Errorf("load new policy: %w", err)
+	// Load new policy (supports both .wasm and .yaml/.yml)
+	if wasm.IsYAMLPolicy(e.policyPath) {
+		if err := newRuntime.LoadPolicyFromYAML(e.ctx, e.policyPath); err != nil {
+			newRuntime.Close(e.ctx)
+			return fmt.Errorf("load new YAML policy: %w", err)
+		}
+	} else {
+		if err := newRuntime.LoadPolicy(e.ctx, e.policyPath); err != nil {
+			newRuntime.Close(e.ctx)
+			return fmt.Errorf("load new policy: %w", err)
+		}
 	}
 
 	// Create new policy instance
