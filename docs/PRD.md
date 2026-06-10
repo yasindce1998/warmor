@@ -4,7 +4,7 @@
 **Tagline:** Cross-platform, Wasm-powered system-level security enforcer  
 **Version:** 1.1.0-beta  
 **Date:** 2026-06-02  
-**Status:** Phase 4 Complete (Linux Production, Windows/macOS Beta)
+**Status:** Phase 5 Complete
 
 ---
 
@@ -33,7 +33,7 @@ Traditional security enforcers (AppArmor, SELinux, eBPF) are:
 | **Phase 2** | ✅ COMPLETE | ALLOW/DENY/LOG, caching, metrics | All |
 | **Phase 3** | ✅ COMPLETE | Multi-syscall (openat, connect), type-safe events | All |
 | **Phase 4** | ✅ COMPLETE | Windows (ETW), macOS (ESF), unified policies | Linux/Windows/macOS |
-| **Phase 5** | 🚧 IN PROGRESS | Kubernetes, dashboards, production hardening | All |
+| **Phase 5** | ✅ COMPLETE | YAML DSL, Kubernetes, dashboards, hardening | All |
 | **Phase 6** | ⏳ PENDING | Stateful policies, DSL, fleet management | All |
 
 ### Key Metrics Achieved
@@ -472,70 +472,6 @@ warmor_errors_total{type="wasm_panic|timeout|invalid_decision"}
 
 ---
 
-## 5.5 Implementation Summary
-
-### Codebase Structure
-
-**Core Components Implemented:**
-- `cmd/warmor-daemon/` - Main enforcer daemon (1,000+ LOC)
-- `internal/ebpf/` - Linux eBPF integration (cilium/ebpf)
-- `internal/platform/` - Platform abstraction layer with OS-specific implementations
-  - `linux.go` - eBPF-based monitoring
-  - `windows.go` - ETW + eBPF-for-Windows dual mode
-  - `darwin.go` - ESF (Endpoint Security Framework)
-- `internal/wasm/` - WASM runtime and policy evaluation
-- `internal/enforcer/` - Decision enforcement and action handling
-- `internal/cache/` - LRU decision caching
-- `internal/metrics/` - Prometheus metrics collection and exposure
-- `internal/logging/` - Structured logging with zerolog
-- `internal/patterns/` - Pattern matching (glob/regex)
-- `pkg/api/` - Public API types and event structures
-
-**Supported Event Types:**
-- `ProcessEvent` - Process creation/execution (execve)
-- `FileEvent` - File operations (openat, read, write)
-- `NetworkEvent` - Network operations (connect, sendto, recvfrom)
-
-**Example Policies:**
-- `policies/example/` - Basic process filtering (Rust)
-- `policies/advanced/` - Complex policy with multiple syscalls
-- `policies/cross-platform/` - Platform-aware rules (Linux/Windows/macOS)
-- `policies/multi/` - Multi-syscall monitoring policy
-
-### Key Implementation Details
-
-**WASM Runtime:** Wazero (tetratelabs/wazero v1.11.0)
-- Pure Go implementation (no CGO)
-- WASI support for policy ABI
-- Dynamic policy loading and hot-reload
-
-**Caching:** LRU Cache with TTL
-- 10,000 entry limit
-- 5-minute expiration
-- >90% hit rate for typical workloads
-
-**Metrics:** Prometheus format
-- syscalls_total (by action and syscall type)
-- policy_evaluation_duration_seconds
-- cache_hit_ratio
-- errors_total
-
-**Logging:** JSON with zerolog
-- Structured fields for context
-- Configurable log levels
-- Timestamped events
-
-### What's NOT Yet Implemented (Phase 5-6)
-
-- ❌ Kubernetes DaemonSet and Helm charts
-- ❌ Grafana dashboards
-- ❌ Central policy management server
-- ❌ Stateful policy engine with state persistence
-- ❌ Policy DSL for easier authoring
-- ❌ A/B testing framework
-- ❌ Advanced enforcement (network filtering, encryption)
-- ❌ SIEM integration
-
 ---
 
 ## 6. Technical Architecture
@@ -759,25 +695,26 @@ Cold Path (Cache Miss):
 - Feature parity across Linux (eBPF) and Windows/macOS (ETW/ESF)
 - Comprehensive platform-specific documentation (PLATFORM_LINUX.md, PLATFORM_WINDOWS.md, PLATFORM_MACOS.md)
 
-### Phase 5: Production Readiness (Weeks 15-18) 🚧 IN PROGRESS
+### Phase 5: Production Readiness (Weeks 15-18) ✅ COMPLETE
 **Goal:** Make warmor production-ready
 
 **Deliverables:**
 - [x] Structured logging with zerolog (logging/logger.go)
 - [x] Prometheus metrics and health endpoints (metrics/server.go, /metrics, /health, /ready)
 - [x] Comprehensive documentation (README.md, BUILD.md, GETTING_STARTED.md, ARCHITECTURE.md, platform guides)
-- [ ] Kubernetes DaemonSet and Helm chart (planned for next phase)
-- [ ] Grafana dashboards (planned for next phase)
-- [ ] Security audit (planned)
-- [ ] Performance benchmarks (caching/latency verified, throughput validated)
+- [x] YAML Policy DSL with warmor-compile CLI
+- [x] YAML -> Rust -> WASM compilation pipeline
+- [x] Kubernetes DaemonSet and Helm chart (deploy/helm/warmor/)
+- [x] Grafana dashboards (deploy/grafana/)
+- [x] Codebase hardening and security audit
 
-**Success Criteria:** 🚧 PARTIAL
+**Success Criteria:** ✅ MET
 - [x] All events logged with context and timestamps
 - [x] Prometheus-compatible metrics exposed on :9090
 - [x] Complete documentation for all 3 platforms
-- [ ] Can deploy to production Kubernetes cluster (requires Helm chart)
-- [ ] Full observability stack ready (dashboards pending)
-- [ ] Security best practices documented
+- [x] Deploy to production Kubernetes cluster via Helm chart
+- [x] Full observability stack (Grafana dashboards + Prometheus)
+- [x] Security best practices documented and enforced
 
 ### Phase 6: Advanced Features (Weeks 19-24) ⏳ NOT STARTED
 **Goal:** Add enterprise features
@@ -940,10 +877,9 @@ Cold Path (Cache Miss):
 
 ### Next Priorities
 
-1. **Phase 5 Completion:** Kubernetes support, dashboards, and production hardening
-2. **Community Building:** Gather feedback from production deployments
-3. **Enterprise Features:** Stateful policies and fleet management (Phase 6)
-4. **Ecosystem:** Build policy library and community contributions
+1. **Community Building:** Gather feedback from production deployments
+2. **Enterprise Features:** Stateful policies and fleet management (Phase 6)
+3. **Ecosystem:** Build policy library and community contributions
 
 ### Key Differentiators
 
@@ -955,6 +891,6 @@ Cold Path (Cache Miss):
 ---
 
 **Document Version:** 1.1.0-beta  
-**Last Updated:** 2026-06-02  
-**Status:** Phase 4 Complete, Phase 5 In Progress  
-**Next Review:** After Phase 5 completion (estimated 2026-07-15)
+**Last Updated:** 2026-06-10  
+**Status:** Phase 5 Complete  
+**Next Review:** After Phase 6 planning begins
