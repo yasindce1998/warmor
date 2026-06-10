@@ -68,4 +68,4 @@ deps:
 	@echo "==> Installing Go dependencies..."
 	go mod download
 	@echo "==> Installing Rust WASI target..."
-	rustup target add wasm32-wasi
+	rustup target add wasm32-wasip1

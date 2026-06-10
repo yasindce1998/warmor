@@ -1,6 +1,6 @@
 module github.com/yasindce1998/warmor
 
-go 1.26.2
+go 1.24.0
 
 require (
 	github.com/cilium/ebpf v0.17.3

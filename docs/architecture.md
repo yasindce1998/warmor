@@ -168,7 +168,7 @@ pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i3
 
 **Purpose:** Allow non-Rust users to author policies declaratively via YAML, compiled to WASM.
 
-**Pipeline:** `YAML → Parse/Validate → Rust codegen → cargo build --target wasm32-wasi → .wasm`
+**Pipeline:** `YAML → Parse/Validate → Rust codegen → cargo build --target wasm32-wasip1 → .wasm`
 
 **Architecture:**
 ```

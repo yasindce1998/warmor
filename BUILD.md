@@ -22,7 +22,7 @@ This guide provides detailed instructions for building warmor from source.
    cargo --version
    
    # Add WASI target
-   rustup target add wasm32-wasi
+   rustup target add wasm32-wasip1
    ```
 
 3. **Clang/LLVM** (for eBPF compilation)
@@ -83,7 +83,7 @@ This guide provides detailed instructions for building warmor from source.
    cargo --version
    
    # Add WASI target
-   rustup target add wasm32-wasi
+   rustup target add wasm32-wasip1
    ```
 
 3. **Visual Studio Build Tools** (optional, for CGO)
@@ -113,7 +113,7 @@ This guide provides detailed instructions for building warmor from source.
    cargo --version
    
    # Add WASI target
-   rustup target add wasm32-wasi
+   rustup target add wasm32-wasip1
    ```
 
 3. **Xcode Command Line Tools**
@@ -160,7 +160,7 @@ cd warmor
 
 # Build WASM policy
 cd policies\example
-cargo build --release --target wasm32-wasi
+cargo build --release --target wasm32-wasip1
 cd ..\..
 
 # Build warmor daemon
@@ -212,7 +212,7 @@ xcode-select --install
 
 # Build WASM policy
 cd policies/example
-cargo build --release --target wasm32-wasi
+cargo build --release --target wasm32-wasip1
 cd ../..
 
 # Build warmor daemon with ESF support
@@ -327,7 +327,7 @@ cd ../..
 This compiles the Rust policy to `policies/example/policy.wasm`.
 
 **Troubleshooting:**
-- If you get "error: can't find crate for `std`", add WASI target: `rustup target add wasm32-wasi`
+- If you get "error: can't find crate for `std`", add WASI target: `rustup target add wasm32-wasip1`
 - If build is slow, it's normal for the first build (Rust compiles dependencies)
 
 ### Step 5: Build warmor Daemon
@@ -346,7 +346,7 @@ go build -o warmor-daemon ./cmd/warmor-daemon
 go build -o warmor-compile ./cmd/warmor-compile
 ```
 
-This builds the YAML-to-WASM policy compiler. Requires Rust + wasm32-wasi target for actual compilation, but validation (`--validate`) works without Rust.
+This builds the YAML-to-WASM policy compiler. Requires Rust + wasm32-wasip1 target for actual compilation, but validation (`--validate`) works without Rust.
 
 ### Step 7: Build Test Tools (Optional)
 

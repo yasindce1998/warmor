@@ -133,7 +133,7 @@ cargo --version
 ### 1. Build WASM Policy
 ```powershell
 cd policies\cross-platform
-cargo build --release --target wasm32-wasi
+cargo build --release --target wasm32-wasip1
 cd ..\..
 ```
 
