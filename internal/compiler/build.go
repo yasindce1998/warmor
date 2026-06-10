@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -115,7 +114,10 @@ func cargoBuild(crateDir, policyName string, opts BuildOptions) (string, error) 
 	}
 
 	if !filepath.IsAbs(outputPath) {
-		wd, _ := os.Getwd()
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("get working directory: %w", err)
+		}
 		outputPath = filepath.Join(wd, outputPath)
 	}
 
@@ -140,11 +142,3 @@ func CargoAvailable() bool {
 	return checkCargo() == nil
 }
 
-func RuntimeTarget() string {
-	switch runtime.GOOS {
-	case "linux":
-		return "wasm32-wasi"
-	default:
-		return "wasm32-wasi"
-	}
-}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yasindce1998/warmor/internal/enforcer"
+	"github.com/yasindce1998/warmor/internal/version"
 )
 
 var (
@@ -20,14 +22,13 @@ var (
 	showVersion   = flag.Bool("version", false, "Show version and exit")
 )
 
-const Version = "1.1.0-beta"
 
 func main() {
 	flag.Parse()
 
 	// Handle version flag
 	if *showVersion {
-		log.Printf("warmor version %s", Version)
+		log.Printf("warmor version %s", version.Version)
 		return
 	}
 
@@ -109,12 +110,12 @@ func main() {
 }
 
 func printBanner() {
-	banner := `
+	banner := fmt.Sprintf(`
 ╦ ╦╔═╗╦═╗╔╦╗╔═╗╦═╗
 ║║║╠═╣╠╦╝║║║║ ║╠╦╝
 ╚╩╝╩ ╩╩╚═╩ ╩╚═╝╩╚═
 WASM-Powered Security Enforcer
-Version: 1.1.0-beta
-`
+Version: %s
+`, version.Version)
 	log.Println(banner)
 }

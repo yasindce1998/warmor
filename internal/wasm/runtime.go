@@ -36,9 +36,18 @@ func NewRuntime(ctx context.Context) (*Runtime, error) {
 	}, nil
 }
 
+const maxPolicySize = 64 * 1024 * 1024 // 64 MiB
+
 // LoadPolicy loads a WASM policy module from file
 func (r *Runtime) LoadPolicy(ctx context.Context, path string) error {
-	// Read WASM file
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat policy file: %w", err)
+	}
+	if info.Size() > maxPolicySize {
+		return fmt.Errorf("policy file too large: %d bytes (max %d)", info.Size(), maxPolicySize)
+	}
+
 	wasmBytes, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read policy file: %w", err)

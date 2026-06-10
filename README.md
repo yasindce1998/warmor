@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26.2+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Phase%204%20In%20Progress-yellow)](docs/OVERVIEW.md)
+[![Status](https://img.shields.io/badge/Status-Phase%205%20Complete-brightgreen)](docs/OVERVIEW.md)
 [![Windows](https://img.shields.io/badge/Windows-Beta%2FETW%2BeBPF-yellow)](docs/PLATFORM_WINDOWS.md)
 [![Linux](https://img.shields.io/badge/Linux-Production-brightgreen)](docs/PLATFORM_LINUX.md)
 [![macOS](https://img.shields.io/badge/macOS-Beta%2FESF-yellow)](docs/PLATFORM_MACOS.md)
@@ -47,18 +47,30 @@ Application → Platform Hook (eBPF/ESF/KMD) → warmor Daemon → WASM Policy �
   - **macOS:** 🚧 Beta (ESF)
 - ✅ **Safe:** WASM sandbox prevents policy bugs from crashing the system
 - ✅ **Portable:** Write policies in Rust, Go, or C and compile to WASM
-- ✅ **Hot-Reload:** Update policies without restarting the enforcer
+- ✅ **YAML Policy DSL:** Declarative policies compiled to WASM (no Rust knowledge required)
+- ✅ **Hot-Reload:** Update policies without restarting the enforcer (SIGHUP)
 - ✅ **High Performance:** <100μs policy evaluation latency (P95)
 - ✅ **Zero Trust:** Kernel-level enforcement that can't be bypassed
+
+### Policy Authoring
+- ✅ **YAML DSL:** Declarative rules with conditions (all/any/not), glob matching, numeric comparisons
+- ✅ **Variables:** Reusable constants referenced with `$variable_name`
+- ✅ **Auto-Compilation:** YAML → Rust → WASM pipeline via `warmor-compile`
+- ✅ **Validation:** `warmor-compile --validate` checks policy syntax without compiling
+- ✅ **Rust Emission:** `warmor-compile --rust-only` emits intermediate Rust for inspection
 
 ### Observability & Performance
 - ✅ **Decision Caching:** 10k-entry LRU cache with >90% hit rate
 - ✅ **Structured Logging:** JSON logs with zerolog for easy parsing
 - ✅ **Prometheus Metrics:** Full observability with /metrics endpoint
+- ✅ **Grafana Dashboards:** Pre-built dashboards for events, latency, cache, and errors
 - ✅ **Pattern Matching:** Glob and regex support in policies
 - ✅ **Action Enforcement:** ALLOW/DENY/LOG with statistics tracking
 
-### Monitoring & Enforcement
+### Deployment & Operations
+- ✅ **Kubernetes Helm Chart:** DaemonSet deployment with RBAC, ServiceMonitor, and ConfigMap policies
+- ✅ **Grafana Sidecar:** Auto-provisioned dashboards via ConfigMap labels
+- ✅ **Health/Readiness Probes:** `/health` and `/ready` endpoints for K8s liveness
 - ✅ **Multi-Syscall Support:** Monitor execve, openat, connect, sendto, recvfrom
 - ✅ **Type-Safe Events:** ProcessEvent, FileEvent, NetworkEvent structures
 - ✅ **Rich Context:** PID, UID, GID, process path, arguments, timestamps
@@ -116,16 +128,56 @@ make all
 sudo ./warmor-daemon
 ```
 
-### Your First Policy
+### Your First Policy (YAML DSL)
 
-Create a simple policy in Rust:
+Create a declarative policy in YAML — no Rust required:
+
+```yaml
+name: my-first-policy
+version: 1
+description: "Block execution from /tmp and log network tools"
+
+variables:
+  network_tools: ["/usr/bin/nc", "/usr/bin/ncat", "/usr/bin/socat"]
+
+rules:
+  - name: block-tmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    action: deny
+    reason: "Execution from temp directory"
+
+  - name: log-network-tools
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $network_tools }
+    action: log
+
+default_action: allow
+```
+
+Compile and run:
+
+```bash
+# Compile YAML to WASM
+warmor-compile policy.yaml -o policy.wasm
+
+# Or pass YAML directly to the daemon (auto-compiles if Rust toolchain present)
+sudo ./warmor-daemon -policy policy.yaml
+```
+
+### Writing Policies in Rust (Advanced)
+
+For full control, write policies directly in Rust:
 
 ```rust
 #[no_mangle]
 pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i32 {
     let event: Event = parse_event(event_ptr, event_len);
     
-    // Block root from running bash
     if event.uid == 0 && event.filename.contains("bash") {
         return ACTION_DENY;
     }
@@ -133,8 +185,6 @@ pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i3
     ACTION_ALLOW
 }
 ```
-
-Compile and run:
 
 ```bash
 cd policies/example
@@ -319,16 +369,15 @@ Cache Size: 245/10000
     - Requires System Extension approval
     - See [macOS Guide](docs/PLATFORM_MACOS.md)
 
-**Phase 5: Production Readiness** 🚧 (In Progress)
-- [x] Structured logging and metrics infrastructure
-- [x] Comprehensive documentation for all platforms
-- [ ] Kubernetes DaemonSet and Helm charts
-- [ ] Grafana dashboards
-- [ ] Production security audit and hardening
+- [x] **Phase 5:** Production Readiness
+  - YAML Policy DSL with warmor-compile CLI
+  - YAML → Rust → WASM compilation pipeline
+  - Kubernetes Helm chart (DaemonSet, RBAC, ServiceMonitor)
+  - Grafana dashboards (events, latency, cache, errors)
+  - Codebase hardening and security audit
 
 **Phase 6: Advanced Features** ⏳ (Planned)
 - Stateful policy engine with process lineage tracking
-- Policy as Code DSL for easier authoring
 - Central policy management server for fleet management
 - A/B testing framework for policy changes
 - Advanced enforcement (network filtering, encryption)
@@ -357,6 +406,7 @@ make clean        # Clean build artifacts
 warmor/
 ├── cmd/                    # Command-line tools
 │   ├── warmor-daemon/     # Main enforcer daemon
+│   ├── warmor-compile/    # YAML → WASM policy compiler
 │   ├── test-ebpf/         # eBPF testing tool
 │   └── test-wasm/         # WASM testing tool
 ├── internal/              # Internal packages
@@ -364,49 +414,37 @@ warmor/
 │   │   ├── linux.go       # Linux (eBPF) - Production
 │   │   ├── windows.go     # Windows (ETW/eBPF) - Beta
 │   │   ├── darwin.go      # macOS (ESF) - Beta
-│   │   ├── new_linux.go   # Linux platform factory
-│   │   ├── new_windows.go # Windows platform factory
-│   │   ├── new_darwin.go  # macOS platform factory
 │   │   ├── interface.go   # Platform interface
 │   │   ├── etw/           # Windows ETW/eBPF consumer
 │   │   └── esf/           # macOS ESF client
 │   ├── ebpf/              # Linux eBPF loader
 │   ├── wasm/              # WASM runtime (Wazero)
 │   ├── enforcer/          # Enforcement logic
+│   ├── compiler/          # YAML→Rust→WASM compiler
 │   ├── cache/             # Decision caching (LRU)
 │   ├── logging/           # Structured logging (zerolog)
 │   ├── metrics/           # Prometheus metrics
+│   ├── version/           # Centralized version constant
 │   ├── patterns/          # Pattern matching (glob/regex)
 │   └── testing/           # Testing framework
 ├── pkg/api/               # Public API types
 ├── policies/              # WASM policies
-│   ├── example/           # Example policy
+│   ├── example/           # Example Rust policy
+│   ├── yaml-example/      # Example YAML policy
 │   ├── cross-platform/    # Cross-platform policy
 │   ├── advanced/          # Advanced policy
 │   └── multi/             # Multi-syscall policy
+├── deploy/                # Deployment artifacts
+│   ├── helm/warmor/       # Kubernetes Helm chart
+│   │   ├── templates/     # K8s manifests (DaemonSet, Service, etc.)
+│   │   ├── policies/      # Default YAML policy
+│   │   └── values.yaml    # Helm values
+│   └── grafana/           # Grafana dashboards (JSON + ConfigMap)
 ├── bpf/                   # Linux eBPF C programs
-│   ├── execve_monitor.bpf.c
-│   ├── openat_monitor.bpf.c
-│   └── connect_monitor.bpf.c
 ├── bpf-windows/           # Windows eBPF C programs
-│   ├── process_monitor.bpf.c
-│   ├── file_monitor.bpf.c
-│   ├── network_monitor.bpf.c
-│   └── Makefile
 ├── macos/                 # macOS System Extension
-│   └── SystemExtension/
-│       ├── Info.plist
-│       └── warmor.entitlements
 ├── scripts/               # Build and setup scripts
 ├── docs/                  # Documentation
-│   ├── architecture.md    # System architecture
-│   ├── PRD.md             # Product requirements
-│   ├── OVERVIEW.md        # Project status
-│   ├── PLATFORM_LINUX.md  # Linux guide
-│   ├── PLATFORM_WINDOWS.md # Windows guide
-│   └── PLATFORM_MACOS.md  # macOS guide
-├── .gitignore             # Git ignore rules
-
 ├── BUILD.md               # Build instructions
 ├── GETTING_STARTED.md     # Quick start guide
 ├── README.md              # This file
@@ -455,5 +493,5 @@ warmor is licensed under the [MIT License](LICENSE).
 
 **Made with ❤️ by the warmor team**
 
-**Version:** 1.1.0-beta (Linux Production, Windows/macOS Beta)  
-**Last Updated:** 2026-06-02
+**Version:** 1.1.0-beta (Phase 5 Complete)  
+**Last Updated:** 2026-06-10

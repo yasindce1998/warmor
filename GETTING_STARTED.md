@@ -47,18 +47,26 @@ This guide will help you build and run warmor - a cross-platform WASM-powered se
 warmor/
 ├── cmd/
 │   ├── warmor-daemon/     # Main enforcer daemon
+│   ├── warmor-compile/    # YAML → WASM policy compiler
 │   ├── test-ebpf/         # eBPF testing tool
 │   └── test-wasm/         # WASM testing tool
 ├── internal/
 │   ├── ebpf/              # eBPF loader and events
 │   ├── wasm/              # WASM runtime and policy
-│   └── enforcer/          # Main enforcement logic
+│   ├── compiler/          # YAML→Rust→WASM compiler
+│   ├── enforcer/          # Main enforcement logic
+│   ├── cache/             # LRU decision cache
+│   ├── metrics/           # Prometheus metrics
+│   └── version/           # Centralized version
 ├── pkg/
 │   └── api/               # Public API types
 ├── policies/
-│   └── example/           # Example Rust policy
-├── bpf/
-│   └── execve_monitor.bpf.c  # eBPF C program
+│   ├── example/           # Example Rust policy
+│   └── yaml-example/      # Example YAML policy
+├── deploy/
+│   ├── helm/warmor/       # Kubernetes Helm chart
+│   └── grafana/           # Grafana dashboards
+├── bpf/                   # Linux eBPF C programs
 └── docs/                  # Documentation
 ```
 
@@ -103,11 +111,11 @@ go build -o warmor-daemon ./cmd/warmor-daemon
 ### Basic Usage
 
 ```bash
-# Run with default policy (requires root for eBPF)
-sudo ./warmor-daemon
-
-# Use custom policy
+# Run with a pre-compiled WASM policy (requires root for eBPF)
 sudo ./warmor-daemon -policy /path/to/policy.wasm
+
+# Run with a YAML policy (auto-compiles if Rust toolchain available)
+sudo ./warmor-daemon -policy /path/to/policy.yaml
 
 # Enable debug logging
 sudo ./warmor-daemon -log-level debug
@@ -175,7 +183,63 @@ bash -c "echo test"
 
 ## Writing Custom Policies
 
-### Example Policy (Rust)
+### Option A: YAML Policy (Recommended)
+
+Create a file `my-policy.yaml`:
+
+```yaml
+name: my-policy
+version: 1
+description: "Block suspicious activity"
+
+variables:
+  temp_dirs: ["/tmp/**", "/var/tmp/**"]
+  blocked_bins: ["/usr/bin/nc", "/usr/bin/ncat"]
+
+rules:
+  - name: block-tmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    action: deny
+    reason: "Execution from temp directory"
+
+  - name: block-network-tools
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $blocked_bins }
+    action: deny
+
+  - name: log-sensitive-ports
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [22, 4444, 5900] }
+    action: log
+
+default_action: allow
+```
+
+Compile and run:
+
+```bash
+# Compile YAML to WASM
+./warmor-compile my-policy.yaml -o my-policy.wasm
+
+# Or validate without compiling
+./warmor-compile --validate my-policy.yaml
+
+# Run with compiled policy
+sudo ./warmor-daemon -policy my-policy.wasm
+
+# Or run directly with YAML (auto-compiles)
+sudo ./warmor-daemon -policy my-policy.yaml
+```
+
+### Option B: Rust Policy (Advanced)
 
 Create a new policy in `policies/my-policy/`:
 
@@ -209,7 +273,6 @@ pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i3
         return ACTION_DENY;
     });
 
-    // Your policy logic here
     if event.filename.contains("malware") {
         return ACTION_DENY;
     }
@@ -218,16 +281,46 @@ pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i3
 }
 ```
 
-### Build and Test
+Build and test:
 
 ```bash
 cd policies/my-policy
 cargo build --target wasm32-wasi --release
 cp target/wasm32-wasi/release/*.wasm policy.wasm
-
-# Test it
 sudo ../../warmor-daemon -policy policy.wasm
 ```
+
+### warmor-compile CLI Reference
+
+```
+Usage: warmor-compile [flags] <input.yaml>
+
+Flags:
+  -o string          Output file path (default "policy.wasm")
+  --rust-only        Emit Rust source without compiling to WASM
+  --validate         Only validate the YAML policy, don't compile
+  --verbose          Show cargo build output
+  --version          Print version and exit
+```
+
+## Kubernetes Deployment
+
+Deploy warmor cluster-wide using the Helm chart:
+
+```bash
+# Install with default policy
+helm install warmor deploy/helm/warmor/
+
+# Install with custom values
+helm install warmor deploy/helm/warmor/ \
+  --set daemon.logLevel=debug \
+  --set daemon.metricsPort=9090
+
+# Upgrade after policy changes
+helm upgrade warmor deploy/helm/warmor/
+```
+
+The DaemonSet runs on every node with eBPF privileges, scraping metrics via Prometheus ServiceMonitor. Import `deploy/grafana/warmor-dashboard.json` into Grafana for pre-built dashboards.
 
 ## Troubleshooting
 
@@ -264,10 +357,12 @@ This is typically addressed by the decision caching and event filtering implemen
 
 ## Next Steps
 
-1. **Experiment with policies** - Modify `policies/example/src/lib.rs`
-2. **Review the architecture** - See [docs/architecture.md](docs/architecture.md)
-3. **Check platform guides** - See platform-specific documentation in [docs/](docs/)
-4. **Explore policies** - Try other example policies: `policies/advanced`, `policies/cross-platform`, `policies/multi`
+1. **Write a YAML policy** - Start with `policies/yaml-example/` as a template
+2. **Deploy to Kubernetes** - Use the Helm chart in `deploy/helm/warmor/`
+3. **Set up Grafana** - Import `deploy/grafana/warmor-dashboard.json`
+4. **Review the architecture** - See [docs/architecture.md](docs/architecture.md)
+5. **Check platform guides** - See platform-specific documentation in [docs/](docs/)
+6. **Explore Rust policies** - See `policies/advanced`, `policies/cross-platform`, `policies/multi`
 
 ## Getting Help
 
@@ -278,22 +373,19 @@ This is typically addressed by the decision caching and event filtering implemen
 
 ## Implementation Status
 
-### Phase 4 ✅ Complete
+### Phase 5 ✅ Complete
 
-**Core Features:**
 ✅ Cross-platform support (Linux, Windows, macOS)  
-✅ eBPF event capture (Linux)  
-✅ ETW integration (Windows)  
-✅ ESF integration (macOS)  
-✅ WASM policy evaluation  
-✅ Multiple syscalls (execve, openat, connect)  
-✅ Type-safe event structures  
+✅ YAML Policy DSL with warmor-compile CLI  
+✅ YAML → Rust → WASM compilation pipeline  
+✅ Kubernetes Helm chart (DaemonSet, RBAC, ServiceMonitor)  
+✅ Grafana dashboards (events, latency, cache, errors)  
 ✅ Decision caching with LRU  
-✅ Prometheus metrics  
-✅ Structured logging  
+✅ Prometheus metrics and structured logging  
+✅ Hot-reload via SIGHUP  
+✅ Codebase hardening and security audit  
 
 ---
 
-**Version:** 1.1.0-beta (Phase 4 Complete)  
-**Last Updated:** 2026-06-02  
-**Status:** Cross-Platform Beta (Linux Production, Windows/macOS Beta)
+**Version:** 1.1.0-beta (Phase 5 Complete)  
+**Last Updated:** 2026-06-10

@@ -8,14 +8,6 @@ import (
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
-// EvaluationContext provides additional context to policies
-type EvaluationContext struct {
-	Event     *api.Event
-	Timestamp time.Time
-	Hostname  string
-	Metadata  map[string]string
-}
-
 // PolicyEvaluator handles policy evaluation with context
 type PolicyEvaluator struct {
 	policy   *Policy
@@ -33,14 +25,6 @@ func NewPolicyEvaluator(policy *Policy, hostname string) *PolicyEvaluator {
 // Evaluate runs policy evaluation with full context
 func (e *PolicyEvaluator) Evaluate(ctx context.Context, event *api.Event) (*api.ActionResult, error) {
 	start := time.Now()
-
-	// Create evaluation context (for future use with enhanced policies)
-	_ = &EvaluationContext{
-		Event:     event,
-		Timestamp: start,
-		Hostname:  e.hostname,
-		Metadata:  make(map[string]string),
-	}
 
 	// Call policy
 	action, err := e.policy.Evaluate(ctx, event)

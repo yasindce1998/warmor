@@ -11,6 +11,7 @@ import (
 	"github.com/yasindce1998/warmor/internal/logging"
 	"github.com/yasindce1998/warmor/internal/metrics"
 	"github.com/yasindce1998/warmor/internal/platform"
+	"github.com/yasindce1998/warmor/internal/version"
 	"github.com/yasindce1998/warmor/internal/wasm"
 	"github.com/yasindce1998/warmor/pkg/api"
 )
@@ -108,7 +109,7 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 
 	// Initialize metrics server
 	metricsServer := metrics.NewServer(port)
-	metrics.SetPolicyInfo(policyPath, "1.0.0")
+	metrics.SetPolicyInfo(policyPath, version.Version)
 	logger.LogInfo(fmt.Sprintf("✓ Metrics server initialized on :%d", port))
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -326,7 +327,7 @@ func (e *Enforcer) ReloadPolicy() error {
 	}
 
 	e.logger.LogInfo("✓ Policy reloaded successfully")
-	metrics.SetPolicyInfo(e.policyPath, "1.0.0")
+	metrics.SetPolicyInfo(e.policyPath, version.Version)
 	return nil
 }
 

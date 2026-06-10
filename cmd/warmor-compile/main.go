@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/yasindce1998/warmor/internal/compiler"
+	"github.com/yasindce1998/warmor/internal/version"
 )
 
 var (
@@ -13,10 +14,9 @@ var (
 	rustOnly = flag.Bool("rust-only", false, "Emit Rust source without compiling to WASM")
 	validate = flag.Bool("validate", false, "Only validate the YAML policy, don't compile")
 	verbose  = flag.Bool("verbose", false, "Show cargo build output")
-	version  = flag.Bool("version", false, "Print version and exit")
+	showVersion = flag.Bool("version", false, "Print version and exit")
 )
 
-const appVersion = "1.1.0-beta"
 
 func main() {
 	flag.Usage = func() {
@@ -33,8 +33,8 @@ func main() {
 
 	flag.Parse()
 
-	if *version {
-		fmt.Printf("warmor-compile %s\n", appVersion)
+	if *showVersion {
+		fmt.Printf("warmor-compile %s\n", version.Version)
 		os.Exit(0)
 	}
 

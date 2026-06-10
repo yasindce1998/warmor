@@ -340,7 +340,15 @@ go build -o warmor-daemon ./cmd/warmor-daemon
 - If you get import errors, run `go mod tidy`
 - If you get eBPF-related errors, make sure Step 3 completed successfully
 
-### Step 6: Build Test Tools (Optional)
+### Step 6: Build warmor-compile CLI
+
+```bash
+go build -o warmor-compile ./cmd/warmor-compile
+```
+
+This builds the YAML-to-WASM policy compiler. Requires Rust + wasm32-wasi target for actual compilation, but validation (`--validate`) works without Rust.
+
+### Step 7: Build Test Tools (Optional)
 
 ```bash
 go build -o test-ebpf ./cmd/test-ebpf
@@ -361,6 +369,35 @@ make build-tests  # Build test tools only
 make test         # Run Go tests
 make clean        # Clean all build artifacts
 make deps         # Install dependencies
+```
+
+### Building warmor-compile
+
+```bash
+# Build the compiler CLI
+go build -o warmor-compile ./cmd/warmor-compile
+
+# Compile a YAML policy
+./warmor-compile my-policy.yaml -o my-policy.wasm
+
+# Emit Rust source only (no cargo needed)
+./warmor-compile --rust-only my-policy.yaml > policy.rs
+
+# Validate without compiling
+./warmor-compile --validate my-policy.yaml
+```
+
+### Building the Helm Chart
+
+```bash
+# Lint the chart
+helm lint deploy/helm/warmor/
+
+# Template (verify rendered manifests)
+helm template warmor deploy/helm/warmor/
+
+# Package for distribution
+helm package deploy/helm/warmor/
 ```
 
 ## Verification
@@ -696,5 +733,5 @@ For detailed platform-specific information:
 
 ---
 
-**Last Updated:** 2026-06-01  
-**Version:** 1.1.0-beta (Linux Production, Windows Beta)
+**Last Updated:** 2026-06-10  
+**Version:** 1.1.0-beta (Phase 5 Complete)
