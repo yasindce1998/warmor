@@ -1,10 +1,13 @@
 .PHONY: all clean build-bpf build-policy build-daemon generate test help \
-	deploy deploy-audit undeploy status logs policy-check upgrade
+	deploy deploy-audit undeploy status logs policy-check upgrade \
+	docker-build docker-push
 
 NAMESPACE ?= warmor-system
 RELEASE ?= warmor
 CHART ?= deploy/helm/warmor
 POLICY ?= examples/policies/kubernetes-hardening.yaml
+IMAGE ?= ghcr.io/yasindce1998/warmor
+TAG ?= latest
 
 # Default target
 all: build-bpf generate build-policy build-daemon
@@ -31,12 +34,19 @@ help:
 	@echo "  logs          - Tail daemon logs"
 	@echo "  policy-check  - Validate a policy file"
 	@echo ""
+	@echo "Docker Targets:"
+	@echo "  docker-build  - Build container image locally"
+	@echo "  docker-push   - Push image to registry"
+	@echo ""
 	@echo "Variables:"
 	@echo "  NAMESPACE     - Target namespace (default: warmor-system)"
 	@echo "  RELEASE       - Helm release name (default: warmor)"
 	@echo "  POLICY        - Policy file to use (default: examples/policies/kubernetes-hardening.yaml)"
+	@echo "  IMAGE         - Container image (default: ghcr.io/yasindce1998/warmor)"
+	@echo "  TAG           - Image tag (default: latest)"
 	@echo ""
 	@echo "Examples:"
+	@echo "  make docker-build TAG=v0.2.0                   # Build image"
 	@echo "  make deploy-audit                              # Safe first deploy"
 	@echo "  make deploy POLICY=examples/policies/block-crypto-miners.yaml"
 	@echo "  make logs                                      # Watch events"
@@ -99,6 +109,8 @@ deploy:
 	@echo "==> Deploying warmor (enforce mode)..."
 	helm upgrade --install $(RELEASE) $(CHART) \
 		--namespace $(NAMESPACE) --create-namespace \
+		--set image.repository=$(IMAGE) \
+		--set image.tag=$(TAG) \
 		--set daemon.auditMode=false \
 		--set-file policy.yaml=$(POLICY)
 
@@ -107,6 +119,8 @@ deploy-audit:
 	@echo "==> Deploying warmor (audit mode - no blocking)..."
 	helm upgrade --install $(RELEASE) $(CHART) \
 		--namespace $(NAMESPACE) --create-namespace \
+		--set image.repository=$(IMAGE) \
+		--set image.tag=$(TAG) \
 		--set daemon.auditMode=true \
 		--set-file policy.yaml=$(POLICY)
 
@@ -143,3 +157,15 @@ logs:
 policy-check:
 	@echo "==> Validating policy: $(POLICY)"
 	@go run ./cmd/warmor-daemon --validate-policy $(POLICY)
+
+# --- Docker Targets ---
+
+# Build container image
+docker-build:
+	@echo "==> Building container image $(IMAGE):$(TAG)..."
+	docker build -t $(IMAGE):$(TAG) -f deploy/Dockerfile .
+
+# Push container image
+docker-push: docker-build
+	@echo "==> Pushing $(IMAGE):$(TAG)..."
+	docker push $(IMAGE):$(TAG)

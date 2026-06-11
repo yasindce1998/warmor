@@ -1,21 +1,11 @@
-FROM golang:1.24 AS compile-tool
+FROM golang:1.24 AS builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /warmor-compile ./cmd/warmor-compile
-RUN CGO_ENABLED=0 go build -o /warmor-daemon ./cmd/warmor-daemon
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /warmor-daemon ./cmd/warmor-daemon
 
-FROM rust:1.78-slim AS policy-builder
-RUN rustup target add wasm32-unknown-unknown
-COPY --from=compile-tool /warmor-compile /usr/local/bin/warmor-compile
-COPY deploy/helm/warmor/policies/default.yaml /build/policy.yaml
-RUN warmor-compile -o /build/policy.wasm /build/policy.yaml
-
-FROM gcr.io/distroless/static:nonroot
-COPY --from=compile-tool /warmor-daemon /warmor-daemon
-COPY --from=policy-builder /build/policy.wasm /etc/warmor/policy.wasm
-USER nonroot:nonroot
+FROM gcr.io/distroless/static:latest
+COPY --from=builder /warmor-daemon /warmor-daemon
 EXPOSE 9090
 ENTRYPOINT ["/warmor-daemon"]
-CMD ["-policy", "/etc/warmor/policy.wasm", "-metrics-port", "9090"]
