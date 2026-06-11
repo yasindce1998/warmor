@@ -20,10 +20,42 @@ func NewMatcher() *Matcher {
 	}
 }
 
-// MatchGlob checks if path matches glob pattern
+// MatchGlob checks if path matches glob pattern.
+// Supports ** for recursive directory matching.
 func (m *Matcher) MatchGlob(pattern, path string) bool {
+	if strings.Contains(pattern, "**") {
+		return matchDoublestar(pattern, path)
+	}
 	matched, err := filepath.Match(pattern, path)
 	return err == nil && matched
+}
+
+func matchDoublestar(pattern, path string) bool {
+	parts := strings.SplitN(pattern, "**", 2)
+	prefix := parts[0]
+	suffix := parts[1]
+
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+
+	rest := path[len(prefix):]
+
+	if suffix == "" || suffix == "/" {
+		return true
+	}
+
+	suffix = strings.TrimPrefix(suffix, "/")
+
+	segments := strings.Split(rest, "/")
+	for i := range segments {
+		candidate := strings.Join(segments[i:], "/")
+		matched, err := filepath.Match(suffix, candidate)
+		if err == nil && matched {
+			return true
+		}
+	}
+	return false
 }
 
 // MatchRegex checks if text matches regex pattern

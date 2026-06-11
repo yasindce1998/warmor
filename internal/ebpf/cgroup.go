@@ -105,5 +105,8 @@ func GetPIDCgroupID(pid uint32) (uint64, error) {
 			return ResolveCgroupID(cgroupPath)
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return 0, fmt.Errorf("read %s: %w", path, err)
+	}
 	return 0, fmt.Errorf("no cgroup v2 entry found for pid %d", pid)
 }

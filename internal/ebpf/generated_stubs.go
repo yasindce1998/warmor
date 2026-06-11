@@ -23,7 +23,8 @@ type execve_monitorPrograms struct {
 }
 
 type execve_monitorMaps struct {
-	Events *ebpf.Map `ebpf:"events"`
+	Events       *ebpf.Map `ebpf:"events"`
+	CgroupFilter *ebpf.Map `ebpf:"cgroup_filter"`
 }
 
 func (o *execve_monitorObjects) Close() error { return nil }
@@ -44,7 +45,8 @@ type openat_monitorPrograms struct {
 }
 
 type openat_monitorMaps struct {
-	FileEvents *ebpf.Map `ebpf:"file_events"`
+	FileEvents   *ebpf.Map `ebpf:"file_events"`
+	CgroupFilter *ebpf.Map `ebpf:"cgroup_filter"`
 }
 
 func (o *openat_monitorObjects) Close() error { return nil }
@@ -66,6 +68,7 @@ type connect_monitorPrograms struct {
 
 type connect_monitorMaps struct {
 	NetworkEvents *ebpf.Map `ebpf:"network_events"`
+	CgroupFilter  *ebpf.Map `ebpf:"cgroup_filter"`
 }
 
 func (o *connect_monitorObjects) Close() error { return nil }
