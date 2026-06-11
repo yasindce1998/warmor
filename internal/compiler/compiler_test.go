@@ -204,9 +204,7 @@ func TestGenerateCargoToml(t *testing.T) {
 	if !strings.Contains(toml, "serde_json") {
 		t.Error("Cargo.toml missing serde_json dependency")
 	}
-	if !strings.Contains(toml, "wasm32-wasip1") || true {
-		// wasm32-wasip1 target is set via cargo build flags, not in Cargo.toml
-	}
+	// wasm32-unknown-unknown target is set via cargo build flags, not in Cargo.toml
 }
 
 func TestConditionOperators(t *testing.T) {

@@ -52,7 +52,7 @@ func (p *Policy) Evaluate(ctx context.Context, event *api.Event) (api.Action, er
 	// Ensure memory is freed even on error
 	defer func() {
 		if freeFn := p.instance.ExportedFunction("free"); freeFn != nil {
-			freeFn.Call(ctx, uint64(ptr), uint64(len(eventJSON)))
+			_, _ = freeFn.Call(ctx, uint64(ptr), uint64(len(eventJSON)))
 		}
 	}()
 

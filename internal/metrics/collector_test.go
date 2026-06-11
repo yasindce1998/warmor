@@ -7,42 +7,37 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-// Helper function to get counter value
 func getCounterValue(counter prometheus.Counter) float64 {
 	metric := &dto.Metric{}
-	counter.Write(metric)
+	_ = counter.Write(metric)
 	return metric.Counter.GetValue()
 }
 
-// Helper function to get counter vec value
 func getCounterVecValue(counterVec *prometheus.CounterVec, labels ...string) float64 {
 	counter, err := counterVec.GetMetricWithLabelValues(labels...)
 	if err != nil {
 		return 0
 	}
 	metric := &dto.Metric{}
-	counter.Write(metric)
+	_ = counter.Write(metric)
 	return metric.Counter.GetValue()
 }
 
-// Helper function to get gauge value
 func getGaugeValue(gauge prometheus.Gauge) float64 {
 	metric := &dto.Metric{}
-	gauge.Write(metric)
+	_ = gauge.Write(metric)
 	return metric.Gauge.GetValue()
 }
 
-// Helper function to get histogram count
 func getHistogramCount(histogram prometheus.Histogram) uint64 {
 	metric := &dto.Metric{}
-	histogram.Write(metric)
+	_ = histogram.Write(metric)
 	return metric.Histogram.GetSampleCount()
 }
 
-// Helper function to get histogram sum
 func getHistogramSum(histogram prometheus.Histogram) float64 {
 	metric := &dto.Metric{}
-	histogram.Write(metric)
+	_ = histogram.Write(metric)
 	return metric.Histogram.GetSampleSum()
 }
 
@@ -280,7 +275,7 @@ func TestSetPolicyInfo(t *testing.T) {
 			}
 
 			metric := &dto.Metric{}
-			gauge.Write(metric)
+			_ = gauge.Write(metric)
 			value := metric.Gauge.GetValue()
 
 			if value != 1 {

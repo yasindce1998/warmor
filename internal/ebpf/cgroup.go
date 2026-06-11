@@ -64,6 +64,9 @@ func DiscoverPodCgroups(cgroupRoot string) ([]uint64, error) {
 		if !info.IsDir() {
 			return nil
 		}
+		if path == baseDir {
+			return nil
+		}
 		// Pod-level cgroup directories contain "pod" in their name
 		name := info.Name()
 		if strings.Contains(name, "pod") || strings.HasPrefix(name, "cri-containerd-") {

@@ -7,7 +7,7 @@ RUN CGO_ENABLED=0 go build -o /warmor-compile ./cmd/warmor-compile
 RUN CGO_ENABLED=0 go build -o /warmor-daemon ./cmd/warmor-daemon
 
 FROM rust:1.78-slim AS policy-builder
-RUN rustup target add wasm32-wasip1
+RUN rustup target add wasm32-unknown-unknown
 COPY --from=compile-tool /warmor-compile /usr/local/bin/warmor-compile
 COPY deploy/helm/warmor/policies/default.yaml /build/policy.yaml
 RUN warmor-compile -o /build/policy.wasm /build/policy.yaml

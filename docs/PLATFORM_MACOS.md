@@ -131,7 +131,7 @@ cargo --version
 ### 1. Build WASM Policy
 ```bash
 cd policies/cross-platform
-cargo build --release --target wasm32-wasip1
+cargo build --release --target wasm32-unknown-unknown
 cd ../..
 ```
 

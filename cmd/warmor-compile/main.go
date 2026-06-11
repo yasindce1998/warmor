@@ -70,7 +70,7 @@ func main() {
 	if !compiler.CargoAvailable() {
 		fmt.Fprintf(os.Stderr, "error: Rust toolchain not found.\n")
 		fmt.Fprintf(os.Stderr, "Install from https://rustup.rs and run:\n")
-		fmt.Fprintf(os.Stderr, "  rustup target add wasm32-wasip1\n\n")
+		fmt.Fprintf(os.Stderr, "  rustup target add wasm32-unknown-unknown\n\n")
 		fmt.Fprintf(os.Stderr, "Or use --rust-only to emit Rust source for manual compilation.\n")
 		os.Exit(1)
 	}

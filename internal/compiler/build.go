@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -68,7 +69,7 @@ func Build(policy *Policy, opts BuildOptions) (*BuildResult, error) {
 func checkCargo() error {
 	_, err := exec.LookPath("cargo")
 	if err != nil {
-		return fmt.Errorf("cargo not found in PATH. Install Rust from https://rustup.rs and run: rustup target add wasm32-wasip1")
+		return fmt.Errorf("cargo not found in PATH. Install Rust from https://rustup.rs and run: rustup target add wasm32-unknown-unknown")
 	}
 
 	cmd := exec.Command("rustup", "target", "list", "--installed")
@@ -77,32 +78,35 @@ func checkCargo() error {
 		return fmt.Errorf("failed to check rust targets (is rustup installed?): %w", err)
 	}
 
-	if !strings.Contains(string(output), "wasm32-wasip1") {
-		return fmt.Errorf("wasm32-wasip1 target not installed. Run: rustup target add wasm32-wasip1")
+	if !strings.Contains(string(output), "wasm32-unknown-unknown") {
+		return fmt.Errorf("wasm32-unknown-unknown target not installed. Run: rustup target add wasm32-unknown-unknown")
 	}
 
 	return nil
 }
 
 func cargoBuild(crateDir, policyName string, opts BuildOptions) (string, error) {
-	args := []string{"build", "--target", "wasm32-wasip1", "--release"}
+	args := []string{"build", "--target", "wasm32-unknown-unknown", "--release"}
 	cmd := exec.Command("cargo", args...)
 	cmd.Dir = crateDir
 	cmd.Env = append(os.Environ(), "CARGO_TARGET_DIR="+filepath.Join(crateDir, "target"))
 
+	var stderr bytes.Buffer
 	if opts.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stderr = &stderr
 	}
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("cargo build failed: %w", err)
+		return "", fmt.Errorf("cargo build failed: %w\n%s", err, stderr.String())
 	}
 
 	safeName := strings.ReplaceAll(policyName, "-", "_")
 	safeName = strings.ReplaceAll(safeName, " ", "_")
 	wasmFile := fmt.Sprintf("warmor_policy_%s.wasm", safeName)
-	builtPath := filepath.Join(crateDir, "target", "wasm32-wasip1", "release", wasmFile)
+	builtPath := filepath.Join(crateDir, "target", "wasm32-unknown-unknown", "release", wasmFile)
 
 	if _, err := os.Stat(builtPath); err != nil {
 		return "", fmt.Errorf("expected wasm output not found at %s", builtPath)

@@ -187,7 +187,7 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 	// Check cache first
 	if result, hit := e.cache.Get(event); hit {
 		metrics.RecordCacheHit()
-		e.actionHandler.Enforce(e.ctx, event, result)
+		_ = e.actionHandler.Enforce(e.ctx, event, result)
 		e.logger.LogEvent(event, result)
 		metrics.RecordEvent(result.Action.String())
 		metrics.RecordLatency(float64(result.Latency.Microseconds()))
@@ -219,7 +219,7 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 	e.cache.Put(event, result)
 
 	// Enforce the decision
-	e.actionHandler.Enforce(e.ctx, event, result)
+	_ = e.actionHandler.Enforce(e.ctx, event, result)
 
 	// Log the event
 	e.logger.LogEvent(event, result)
@@ -360,7 +360,7 @@ func (e *Enforcer) Stop() {
 
 	// Stop the platform monitor so it stops delivering events.
 	if e.platform != nil {
-		e.platform.Stop()
+		_ = e.platform.Stop()
 	}
 
 	e.wg.Wait()
@@ -375,7 +375,7 @@ func (e *Enforcer) Close() error {
 	if e.metricsServer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		e.metricsServer.Stop(ctx)
+		_ = e.metricsServer.Stop(ctx)
 	}
 
 	// Clean up enforcer resources
