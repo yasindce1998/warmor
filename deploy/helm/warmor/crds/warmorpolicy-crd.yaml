@@ -1,0 +1,189 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: warmorpolicies.warmor.io
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+spec:
+  group: warmor.io
+  names:
+    kind: WarmorPolicy
+    listKind: WarmorPolicyList
+    plural: warmorpolicies
+    singular: warmorpolicy
+    shortNames:
+      - wp
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Version
+          type: integer
+          jsonPath: .spec.version
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: WarmorPolicy defines a security policy enforced by the Warmor eBPF daemon.
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required:
+                - name
+                - version
+                - rules
+                - defaultAction
+              properties:
+                name:
+                  type: string
+                  description: Human-readable policy name.
+                  maxLength: 253
+                version:
+                  type: integer
+                  description: Policy version number (monotonically increasing).
+                  minimum: 1
+                description:
+                  type: string
+                  description: Optional description of what this policy enforces.
+                  maxLength: 1024
+                variables:
+                  type: object
+                  description: Named variables referenced in rule conditions using $var syntax.
+                  additionalProperties:
+                    x-kubernetes-preserve-unknown-fields: true
+                rules:
+                  type: array
+                  description: Ordered list of enforcement rules.
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - event
+                      - action
+                    properties:
+                      name:
+                        type: string
+                        description: Unique name for this rule.
+                        maxLength: 253
+                      event:
+                        type: string
+                        description: Event type this rule matches.
+                        enum:
+                          - process
+                          - file
+                          - network
+                      conditions:
+                        type: object
+                        description: Matching conditions for this rule.
+                        properties:
+                          all:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                          any:
+                            type: array
+                            items:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                      action:
+                        type: string
+                        description: Action to take when conditions match.
+                        enum:
+                          - allow
+                          - deny
+                          - audit
+                      reason:
+                        type: string
+                        description: Human-readable reason logged on enforcement.
+                        maxLength: 512
+                defaultAction:
+                  type: string
+                  description: Default action when no rule matches.
+                  enum:
+                    - allow
+                    - deny
+                    - audit
+                selector:
+                  type: object
+                  description: Optional pod selector to scope this policy.
+                  properties:
+                    matchLabels:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            type: string
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                          values:
+                            type: array
+                            items:
+                              type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  description: Current phase of the policy.
+                  enum:
+                    - Pending
+                    - Active
+                    - Error
+                observedGeneration:
+                  type: integer
+                  format: int64
+                  description: Last generation observed by the controller.
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - "Unknown"
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                nodesApplied:
+                  type: integer
+                  description: Number of nodes where this policy is active.
+                lastApplied:
+                  type: string
+                  format: date-time
+                  description: Timestamp of last successful application.

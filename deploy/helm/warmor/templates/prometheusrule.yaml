@@ -1,0 +1,55 @@
+{{- if .Values.alerting.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "warmor.fullname" . }}
+  labels:
+    {{- include "warmor.labels" . | nindent 4 }}
+    {{- with .Values.alerting.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: warmor.rules
+      rules:
+        {{- if .Values.alerting.rules.highDenyRate.enabled }}
+        - alert: WarmorHighDenyRate
+          expr: sum(rate(warmor_events_total{action="DENY"}[5m])) > {{ .Values.alerting.rules.highDenyRate.threshold }}
+          for: {{ .Values.alerting.rules.highDenyRate.for }}
+          labels:
+            severity: {{ .Values.alerting.rules.highDenyRate.severity }}
+          annotations:
+            summary: "High deny rate detected on {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: "Warmor is denying more than {{ .Values.alerting.rules.highDenyRate.threshold }} events/sec over 5 minutes."
+        {{- end }}
+        {{- if .Values.alerting.rules.daemonDown.enabled }}
+        - alert: WarmorDaemonDown
+          expr: up{job=~".*warmor.*"} == 0
+          for: {{ .Values.alerting.rules.daemonDown.for }}
+          labels:
+            severity: {{ .Values.alerting.rules.daemonDown.severity }}
+          annotations:
+            summary: "Warmor daemon is down on {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: "Warmor daemon has been unreachable for more than {{ .Values.alerting.rules.daemonDown.for }}."
+        {{- end }}
+        {{- if .Values.alerting.rules.highErrorRate.enabled }}
+        - alert: WarmorHighErrorRate
+          expr: rate(warmor_events_processing_errors_total[5m]) > {{ .Values.alerting.rules.highErrorRate.threshold }}
+          for: {{ .Values.alerting.rules.highErrorRate.for }}
+          labels:
+            severity: {{ .Values.alerting.rules.highErrorRate.severity }}
+          annotations:
+            summary: "High error rate in Warmor on {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: "Warmor event processing errors exceed {{ .Values.alerting.rules.highErrorRate.threshold }}/sec."
+        {{- end }}
+        {{- if .Values.alerting.rules.ebpfLoaderFailure.enabled }}
+        - alert: WarmorEBPFLoaderFailure
+          expr: warmor_ebpf_loader_status == 0
+          for: {{ .Values.alerting.rules.ebpfLoaderFailure.for }}
+          labels:
+            severity: {{ .Values.alerting.rules.ebpfLoaderFailure.severity }}
+          annotations:
+            summary: "eBPF programs failed to load on {{ "{{" }} $labels.instance {{ "}}" }}"
+            description: "Warmor eBPF loader has been in a failed state for more than {{ .Values.alerting.rules.ebpfLoaderFailure.for }}."
+        {{- end }}
+{{- end }}

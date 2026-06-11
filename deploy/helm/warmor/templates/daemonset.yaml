@@ -8,6 +8,12 @@ spec:
   selector:
     matchLabels:
       {{- include "warmor.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+    type: {{ .Values.updateStrategy.type }}
+    {{- if eq .Values.updateStrategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxUnavailable: {{ .Values.updateStrategy.maxUnavailable }}
+    {{- end }}
   template:
     metadata:
       annotations:
@@ -22,22 +28,39 @@ spec:
         {{- include "warmor.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "warmor.serviceAccountName" . }}
+      {{- if .Values.priorityClass.enabled }}
+      priorityClassName: {{ include "warmor.priorityClassName" . }}
+      {{- end }}
       hostPID: true
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 30
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       initContainers:
-        - name: compile-policy
+        - name: validate-policy
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/warmor-daemon"]
-          args: ["--version"]
+          args: ["--validate-policy", "/etc/warmor/policy.yaml"]
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              cpu: 100m
+              memory: 64Mi
+            requests:
+              cpu: 50m
+              memory: 32Mi
           volumeMounts:
             - name: policy
               mountPath: /etc/warmor
+              readOnly: true
       containers:
         - name: warmor
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -59,11 +82,24 @@ spec:
             - {{ .Values.daemon.cgroupFilter | quote }}
             {{- end }}
           securityContext:
-            privileged: true
+            privileged: false
+            runAsNonRoot: false
+            runAsUser: 0
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["SYS_ADMIN", "BPF", "PERFMON", "NET_ADMIN"]
           ports:
             - name: metrics
               containerPort: {{ .Values.daemon.metricsPort }}
               protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            failureThreshold: 30
+            periodSeconds: 2
           livenessProbe:
             httpGet:
               path: /health
@@ -81,6 +117,7 @@ spec:
           volumeMounts:
             - name: policy
               mountPath: /etc/warmor
+              readOnly: true
             - name: host-proc
               mountPath: /host/proc
               readOnly: true
@@ -89,6 +126,10 @@ spec:
               readOnly: true
             - name: bpf
               mountPath: /sys/fs/bpf
+            - name: tmp
+              mountPath: /tmp
+            - name: run
+              mountPath: /run
             {{- if .Values.daemon.cgroupFilter }}
             - name: host-cgroup
               mountPath: /host/sys/fs/cgroup
@@ -107,6 +148,12 @@ spec:
         - name: bpf
           hostPath:
             path: /sys/fs/bpf
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: run
+          emptyDir:
+            sizeLimit: 16Mi
         {{- if .Values.daemon.cgroupFilter }}
         - name: host-cgroup
           hostPath:

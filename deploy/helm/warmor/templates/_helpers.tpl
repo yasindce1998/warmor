@@ -56,3 +56,14 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Create the name of the priority class to use
+*/}}
+{{- define "warmor.priorityClassName" -}}
+{{- if .Values.priorityClass.name }}
+{{- .Values.priorityClass.name }}
+{{- else }}
+{{- include "warmor.fullname" . }}
+{{- end }}
+{{- end }}

@@ -43,11 +43,11 @@ policy:
 
 resources:
   limits:
-    cpu: 200m
-    memory: 128Mi
+    cpu: 500m
+    memory: 256Mi
   requests:
     cpu: 100m
-    memory: 64Mi
+    memory: 128Mi
 
 tolerations:
   - operator: Exists
@@ -63,13 +63,82 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext: {}
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+priorityClass:
+  enabled: true
+  name: ""
+  value: 2000000000
+
+updateStrategy:
+  type: RollingUpdate
+  maxUnavailable: "10%"
+
+networkPolicy:
+  enabled: true
+  extraEgress: []
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
 
 serviceMonitor:
   enabled: false
   interval: 15s
   scrapeTimeout: 10s
   additionalLabels: {}
+  metricRelabelings: []
+  relabelings: []
 
 grafana:
   dashboardEnabled: false
+
+alerting:
+  enabled: false
+  additionalLabels: {}
+  rules:
+    highDenyRate:
+      enabled: true
+      threshold: 10
+      for: 5m
+      severity: warning
+    daemonDown:
+      enabled: true
+      for: 2m
+      severity: critical
+    highErrorRate:
+      enabled: true
+      threshold: 1
+      for: 5m
+      severity: warning
+    ebpfLoaderFailure:
+      enabled: true
+      for: 1m
+      severity: critical
+
+webhook:
+  enabled: false
+  port: 9443
+  certManager:
+    enabled: false
+    issuerRef: {}
+  caBundle: ""
+
+ebpf:
+  pinPrograms: true
+  pinPath: /sys/fs/bpf/warmor
+
+logging:
+  format: json
+  output: stdout
+  siem:
+    enabled: false
+    endpoint: ""
+    format: "cef"
+
+policySync:
+  enabled: false
+  source: ""
+  namespace: "warmor-system"
