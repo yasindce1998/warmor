@@ -10,14 +10,16 @@ import (
 
 // ActionHandler handles policy decisions
 type ActionHandler struct {
-	allowed uint64
-	denied  uint64
-	logged  uint64
+	allowed     uint64
+	denied      uint64
+	logged      uint64
+	auditDenied uint64
+	auditMode   bool
 }
 
 // NewActionHandler creates a new action handler
-func NewActionHandler() *ActionHandler {
-	return &ActionHandler{}
+func NewActionHandler(auditMode bool) *ActionHandler {
+	return &ActionHandler{auditMode: auditMode}
 }
 
 // Enforce executes the policy decision
@@ -28,6 +30,12 @@ func (h *ActionHandler) Enforce(ctx context.Context, event *api.Event, result *a
 		return h.handleAllow(event, result)
 
 	case api.ActionDeny:
+		if h.auditMode || result.Audit {
+			result.Audit = true
+			atomic.AddUint64(&h.auditDenied, 1)
+			atomic.AddUint64(&h.logged, 1)
+			return h.handleLog(event, result)
+		}
 		atomic.AddUint64(&h.denied, 1)
 		return h.handleDeny(event, result)
 
@@ -59,8 +67,9 @@ func (h *ActionHandler) handleLog(event *api.Event, result *api.ActionResult) er
 // GetStats returns current enforcement statistics
 func (h *ActionHandler) GetStats() api.EnforcementStats {
 	return api.EnforcementStats{
-		Allowed: atomic.LoadUint64(&h.allowed),
-		Denied:  atomic.LoadUint64(&h.denied),
-		Logged:  atomic.LoadUint64(&h.logged),
+		Allowed:     atomic.LoadUint64(&h.allowed),
+		Denied:      atomic.LoadUint64(&h.denied),
+		Logged:      atomic.LoadUint64(&h.logged),
+		AuditDenied: atomic.LoadUint64(&h.auditDenied),
 	}
 }

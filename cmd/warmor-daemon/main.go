@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,8 @@ var (
 	statsInterval = flag.Duration("stats-interval", 30*time.Second, "Statistics reporting interval")
 	logLevel      = flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	metricsPort   = flag.Int("metrics-port", 9090, "Prometheus metrics port")
+	auditMode     = flag.Bool("audit", false, "Audit mode: log deny decisions without enforcing")
+	cgroupFilter  = flag.String("cgroup-filter", "", "Cgroup paths to filter (comma-separated, or 'auto' for K8s pod discovery)")
 	showVersion   = flag.Bool("version", false, "Show version and exit")
 )
 
@@ -44,12 +47,31 @@ func main() {
 	log.Printf("Stats Interval: %v", *statsInterval)
 	log.Printf("Log Level: %s", *logLevel)
 	log.Printf("Metrics Port: %d", *metricsPort)
+	log.Printf("Audit Mode: %v", *auditMode)
+	if *cgroupFilter != "" {
+		log.Printf("Cgroup Filter: %s", *cgroupFilter)
+	}
 	log.Println("")
 
 	ctx := context.Background()
 
-	// Create enforcer with metrics port
-	enf, err := enforcer.New(ctx, *policyPath, *metricsPort)
+	// Build cgroup filter list
+	var cgroupPaths []string
+	if *cgroupFilter != "" {
+		for _, p := range strings.Split(*cgroupFilter, ",") {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				cgroupPaths = append(cgroupPaths, trimmed)
+			}
+		}
+	}
+
+	// Create enforcer with options
+	enf, err := enforcer.New(ctx, *policyPath, &enforcer.Options{
+		AuditMode:    *auditMode,
+		CgroupFilter: cgroupPaths,
+		MetricsPort:  *metricsPort,
+		LogLevel:     *logLevel,
+	})
 	if err != nil {
 		log.Fatalf("❌ Failed to create enforcer: %v", err)
 	}

@@ -10,6 +10,8 @@ daemon:
   logLevel: info
   statsInterval: 30s
   metricsPort: 9090
+  auditMode: false
+  cgroupFilter: ""
 
 policy:
   yaml: |

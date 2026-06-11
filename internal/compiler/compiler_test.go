@@ -272,6 +272,121 @@ default_action: allow
 	}
 }
 
+func TestAuditModeRule(t *testing.T) {
+	yaml := `
+name: audit-test
+version: 1
+rules:
+  - name: audit-tmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    action: deny
+    mode: audit
+    reason: "audit temp exec"
+
+  - name: enforce-etc-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/**" }
+    action: deny
+    reason: "block /etc write"
+default_action: allow
+`
+	policy, err := Parse([]byte(yaml))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	if policy.Rules[0].Mode != "audit" {
+		t.Errorf("expected rule mode 'audit', got %q", policy.Rules[0].Mode)
+	}
+	if policy.Rules[1].Mode != "" {
+		t.Errorf("expected rule mode '', got %q", policy.Rules[1].Mode)
+	}
+
+	rust, err := GenerateRust(policy)
+	if err != nil {
+		t.Fatalf("GenerateRust failed: %v", err)
+	}
+
+	if !strings.Contains(rust, "ACTION_AUDIT_DENY") {
+		t.Error("generated Rust should contain ACTION_AUDIT_DENY for audit rule")
+	}
+
+	// The enforce rule should use ACTION_DENY, not AUDIT_DENY
+	lines := strings.Split(rust, "\n")
+	foundAuditRule := false
+	foundEnforceRule := false
+	for i, line := range lines {
+		if strings.Contains(line, "Rule: audit-tmp-exec") {
+			// Next return statement should be AUDIT_DENY
+			for j := i + 1; j < len(lines) && j < i+5; j++ {
+				if strings.Contains(lines[j], "return ACTION_AUDIT_DENY") {
+					foundAuditRule = true
+					break
+				}
+			}
+		}
+		if strings.Contains(line, "Rule: enforce-etc-write") {
+			for j := i + 1; j < len(lines) && j < i+5; j++ {
+				if strings.Contains(lines[j], "return ACTION_DENY") {
+					foundEnforceRule = true
+					break
+				}
+			}
+		}
+	}
+	if !foundAuditRule {
+		t.Error("audit rule should return ACTION_AUDIT_DENY")
+	}
+	if !foundEnforceRule {
+		t.Error("enforce rule should return ACTION_DENY (not AUDIT_DENY)")
+	}
+}
+
+func TestAuditModeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr string
+	}{
+		{
+			name: "valid audit mode",
+			yaml: "name: x\nversion: 1\nrules:\n  - name: r\n    event: process\n    conditions:\n      all:\n        - comm: test\n    action: deny\n    mode: audit\ndefault_action: allow\n",
+		},
+		{
+			name: "valid enforce mode",
+			yaml: "name: x\nversion: 1\nrules:\n  - name: r\n    event: process\n    conditions:\n      all:\n        - comm: test\n    action: deny\n    mode: enforce\ndefault_action: allow\n",
+		},
+		{
+			name:    "invalid mode",
+			yaml:    "name: x\nversion: 1\nrules:\n  - name: r\n    event: process\n    conditions:\n      all:\n        - comm: test\n    action: deny\n    mode: invalid\ndefault_action: allow\n",
+			wantErr: "invalid mode",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Parse([]byte(tt.yaml))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("expected error containing %q, got %q", tt.wantErr, err.Error())
+				}
+			}
+		})
+	}
+}
+
 func TestBuildRustOnly(t *testing.T) {
 	policy, err := Parse([]byte(sampleYAML))
 	if err != nil {

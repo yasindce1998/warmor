@@ -35,8 +35,12 @@ type Capabilities struct {
 	Enforcement       bool // Can actually block, not just log
 }
 
-// Current returns the platform for the current OS
-// The actual implementation is in platform-specific files (new_*.go)
+// Config holds platform-agnostic configuration passed to New().
+type Config struct {
+	CgroupFilter []string
+}
+
+// Current returns the platform for the current OS with default config.
 func Current() (Platform, error) {
-	return New()
+	return New(Config{})
 }

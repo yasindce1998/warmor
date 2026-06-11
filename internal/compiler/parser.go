@@ -59,6 +59,7 @@ type rawRule struct {
 	Event      string        `yaml:"event"`
 	Conditions rawConditions `yaml:"conditions"`
 	Action     string        `yaml:"action"`
+	Mode       string        `yaml:"mode,omitempty"`
 	Reason     string        `yaml:"reason,omitempty"`
 }
 
@@ -73,6 +74,7 @@ func parseRule(rr rawRule, variables map[string]interface{}) (*Rule, error) {
 		Name:   rr.Name,
 		Event:  rr.Event,
 		Action: rr.Action,
+		Mode:   rr.Mode,
 		Reason: rr.Reason,
 	}
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
@@ -155,6 +156,54 @@ func (l *Loader) readEvent(rd *ringbuf.Reader, kind EventKind) (*Event, error) {
 	}
 
 	return nil, fmt.Errorf("unknown event kind: %d", kind)
+}
+
+// SetCgroupFilter populates the eBPF cgroup_filter maps across all monitors.
+// A sentinel key=0 is inserted to mark the filter as active. Pass nil or empty
+// to clear the filter (allow all cgroups).
+func (l *Loader) SetCgroupFilter(ids []uint64) error {
+	maps := []*ebpf.Map{
+		l.execveObjs.CgroupFilter,
+		l.openatObjs.CgroupFilter,
+		l.connectObjs.CgroupFilter,
+	}
+
+	for _, m := range maps {
+		if m == nil {
+			continue
+		}
+		// Clear existing entries by iterating and deleting
+		var key uint64
+		iter := m.Iterate()
+		for iter.Next(&key, new(uint8)) {
+			_ = m.Delete(key)
+		}
+
+		if len(ids) == 0 {
+			continue
+		}
+
+		// Insert sentinel key=0 to activate the filter
+		var sentinel uint64
+		var val uint8 = 1
+		if err := m.Put(sentinel, val); err != nil {
+			return fmt.Errorf("set cgroup filter sentinel: %w", err)
+		}
+
+		// Insert each allowed cgroup ID
+		for _, id := range ids {
+			if err := m.Put(id, val); err != nil {
+				return fmt.Errorf("set cgroup filter id %d: %w", id, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// ClearCgroupFilter removes all entries from the cgroup filter maps, disabling filtering.
+func (l *Loader) ClearCgroupFilter() error {
+	return l.SetCgroupFilter(nil)
 }
 
 func (l *Loader) Close() error {

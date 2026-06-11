@@ -24,6 +24,7 @@ type ExecveEvent struct {
 	Comm      [16]byte
 	Filename  [256]byte
 	Timestamp uint64
+	CgroupID  uint64
 }
 
 func (e *ExecveEvent) ToEvent() Event {
@@ -35,6 +36,7 @@ func (e *ExecveEvent) ToEvent() Event {
 		Comm:      nullTerminatedString(e.Comm[:]),
 		Filename:  nullTerminatedString(e.Filename[:]),
 		Timestamp: time.Unix(0, int64(e.Timestamp)),
+		CgroupID:  e.CgroupID,
 	}
 }
 
@@ -48,6 +50,7 @@ type OpenatEvent struct {
 	Flags     uint32
 	Mode      uint32
 	Timestamp uint64
+	CgroupID  uint64
 }
 
 func (e *OpenatEvent) ToEvent() Event {
@@ -61,6 +64,7 @@ func (e *OpenatEvent) ToEvent() Event {
 		Flags:     e.Flags,
 		Mode:      e.Mode,
 		Timestamp: time.Unix(0, int64(e.Timestamp)),
+		CgroupID:  e.CgroupID,
 	}
 }
 
@@ -75,6 +79,7 @@ type ConnectEvent struct {
 	RemoteAddrV4 uint32
 	RemoteAddrV6 [16]byte
 	Timestamp    uint64
+	CgroupID     uint64
 }
 
 func (e *ConnectEvent) ToEvent() Event {
@@ -89,6 +94,7 @@ func (e *ConnectEvent) ToEvent() Event {
 		RemotePort: ntohs(e.RemotePort),
 		Family:     e.Family,
 		Timestamp:  time.Unix(0, int64(e.Timestamp)),
+		CgroupID:   e.CgroupID,
 	}
 }
 
@@ -118,6 +124,7 @@ type Event struct {
 	RemotePort uint16
 	Family     uint16
 	Timestamp  time.Time
+	CgroupID   uint64
 }
 
 func nullTerminatedString(b []byte) string {

@@ -37,7 +37,7 @@ func NewLogger(level string) *Logger {
 
 // LogEvent logs a policy evaluation event
 func (l *Logger) LogEvent(event *api.Event, result *api.ActionResult) {
-	l.logger.Info().
+	e := l.logger.Info().
 		Uint32("pid", event.PID).
 		Uint32("uid", event.UID).
 		Uint32("gid", event.GID).
@@ -46,19 +46,25 @@ func (l *Logger) LogEvent(event *api.Event, result *api.ActionResult) {
 		Str("action", result.Action.String()).
 		Str("reason", result.Reason).
 		Bool("cached", result.Cached).
-		Dur("latency_us", result.Latency).
-		Msg("policy_evaluation")
+		Dur("latency_us", result.Latency)
+	if result.Audit {
+		e = e.Bool("audit", true)
+	}
+	e.Msg("policy_evaluation")
 }
 
 // LogDenial logs a denied action
 func (l *Logger) LogDenial(event *api.Event, result *api.ActionResult) {
-	l.logger.Warn().
+	e := l.logger.Warn().
 		Uint32("pid", event.PID).
 		Uint32("uid", event.UID).
 		Str("comm", event.Comm).
 		Str("filename", event.Filename).
-		Str("reason", result.Reason).
-		Msg("action_denied")
+		Str("reason", result.Reason)
+	if result.Audit {
+		e = e.Bool("audit", true)
+	}
+	e.Msg("action_denied")
 }
 
 // LogError logs an error
@@ -85,6 +91,7 @@ func (l *Logger) LogStats(stats *api.EnforcementStats) {
 		Uint64("allowed", stats.Allowed).
 		Uint64("denied", stats.Denied).
 		Uint64("logged", stats.Logged).
+		Uint64("audit_denied", stats.AuditDenied).
 		Uint64("cache_hits", stats.CacheHits).
 		Uint64("cache_misses", stats.CacheMisses).
 		Dur("avg_latency", avgLatency).

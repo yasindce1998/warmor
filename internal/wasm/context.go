@@ -22,6 +22,9 @@ func NewPolicyEvaluator(policy *Policy, hostname string) *PolicyEvaluator {
 	}
 }
 
+// ActionAuditDeny is the WASM ABI value for per-rule audit mode denials
+const ActionAuditDeny api.Action = 3
+
 // Evaluate runs policy evaluation with full context
 func (e *PolicyEvaluator) Evaluate(ctx context.Context, event *api.Event) (*api.ActionResult, error) {
 	start := time.Now()
@@ -32,6 +35,13 @@ func (e *PolicyEvaluator) Evaluate(ctx context.Context, event *api.Event) (*api.
 		return nil, err
 	}
 
+	// Map AUDIT_DENY from WASM to ActionDeny + Audit flag
+	audit := false
+	if action == ActionAuditDeny {
+		action = api.ActionDeny
+		audit = true
+	}
+
 	// Build result
 	result := &api.ActionResult{
 		Action:    action,
@@ -39,6 +49,7 @@ func (e *PolicyEvaluator) Evaluate(ctx context.Context, event *api.Event) (*api.
 		Timestamp: start,
 		Cached:    false,
 		Latency:   time.Since(start),
+		Audit:     audit,
 	}
 
 	return result, nil

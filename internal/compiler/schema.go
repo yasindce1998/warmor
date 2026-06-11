@@ -16,6 +16,7 @@ type Rule struct {
 	Event      string     `yaml:"event"`
 	Conditions Conditions `yaml:"conditions"`
 	Action     string     `yaml:"action"`
+	Mode       string     `yaml:"mode,omitempty"`
 	Reason     string     `yaml:"reason,omitempty"`
 }
 
@@ -78,6 +79,9 @@ func (r *Rule) Validate() error {
 	}
 	if !isValidAction(r.Action) {
 		return fmt.Errorf("invalid action %q (must be allow, deny, or log)", r.Action)
+	}
+	if r.Mode != "" && r.Mode != "enforce" && r.Mode != "audit" {
+		return fmt.Errorf("invalid mode %q (must be enforce or audit)", r.Mode)
 	}
 	if len(r.Conditions.All) == 0 && len(r.Conditions.Any) == 0 && len(r.Conditions.Not) == 0 {
 		return fmt.Errorf("rule must have at least one condition")

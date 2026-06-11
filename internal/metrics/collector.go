@@ -64,6 +64,14 @@ var (
 			Help: "Total number of event processing errors",
 		},
 	)
+
+	// AuditDeniedTotal counts deny decisions downgraded to log in audit mode
+	AuditDeniedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "warmor_audit_denied_total",
+			Help: "Total number of deny decisions downgraded to log (audit mode)",
+		},
+	)
 )
 
 // RecordEvent records an event with its action
@@ -99,4 +107,9 @@ func SetPolicyInfo(path, version string) {
 // RecordProcessingError records a processing error
 func RecordProcessingError() {
 	EventsProcessingErrors.Inc()
+}
+
+// RecordAuditDenied records a deny decision downgraded to log in audit mode
+func RecordAuditDenied() {
+	AuditDeniedTotal.Inc()
 }

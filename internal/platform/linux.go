@@ -11,16 +11,23 @@ import (
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
+// LinuxConfig holds configuration for the Linux platform.
+type LinuxConfig struct {
+	CgroupFilter []string
+}
+
 type LinuxPlatform struct {
 	ebpfLoader *ebpf.Loader
 	eventChan  chan<- *api.Event
 	stopChan   chan struct{}
 	wg         sync.WaitGroup
+	config     LinuxConfig
 }
 
-func NewLinuxPlatform() (Platform, error) {
+func NewLinuxPlatform(config LinuxConfig) (Platform, error) {
 	return &LinuxPlatform{
 		stopChan: make(chan struct{}),
+		config:   config,
 	}, nil
 }
 
@@ -34,6 +41,28 @@ func (p *LinuxPlatform) Load(ctx context.Context) error {
 		return fmt.Errorf("load eBPF: %w", err)
 	}
 	p.ebpfLoader = loader
+
+	if len(p.config.CgroupFilter) > 0 {
+		var ids []uint64
+		if len(p.config.CgroupFilter) == 1 && p.config.CgroupFilter[0] == "auto" {
+			ids, err = ebpf.DiscoverPodCgroups("/sys/fs/cgroup")
+			if err != nil {
+				loader.Close()
+				return fmt.Errorf("discover pod cgroups: %w", err)
+			}
+		} else {
+			ids, err = ebpf.ResolveCgroupIDs(p.config.CgroupFilter)
+			if err != nil {
+				loader.Close()
+				return fmt.Errorf("resolve cgroup filter: %w", err)
+			}
+		}
+		if err := loader.SetCgroupFilter(ids); err != nil {
+			loader.Close()
+			return fmt.Errorf("set cgroup filter: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -75,6 +104,7 @@ func (p *LinuxPlatform) monitorProcessEvents(ctx context.Context) {
 			Comm:      ev.Comm,
 			Filename:  ev.Filename,
 			Timestamp: ev.Timestamp,
+			CgroupID:  ev.CgroupID,
 			Process: &api.ProcessEvent{
 				BaseEvent: api.BaseEvent{
 					Type:      api.EventTypeProcess,
@@ -83,6 +113,7 @@ func (p *LinuxPlatform) monitorProcessEvents(ctx context.Context) {
 					GID:       ev.GID,
 					Comm:      ev.Comm,
 					Timestamp: ev.Timestamp,
+					CgroupID:  ev.CgroupID,
 				},
 				Filename: ev.Filename,
 			},
@@ -122,6 +153,7 @@ func (p *LinuxPlatform) monitorFileEvents(ctx context.Context) {
 			Comm:      ev.Comm,
 			Filename:  ev.Filename,
 			Timestamp: ev.Timestamp,
+			CgroupID:  ev.CgroupID,
 			File: &api.FileEvent{
 				BaseEvent: api.BaseEvent{
 					Type:      api.EventTypeFile,
@@ -130,6 +162,7 @@ func (p *LinuxPlatform) monitorFileEvents(ctx context.Context) {
 					GID:       ev.GID,
 					Comm:      ev.Comm,
 					Timestamp: ev.Timestamp,
+					CgroupID:  ev.CgroupID,
 				},
 				Operation: "open",
 				Path:      ev.Filename,
@@ -176,6 +209,7 @@ func (p *LinuxPlatform) monitorNetworkEvents(ctx context.Context) {
 			GID:       ev.GID,
 			Comm:      ev.Comm,
 			Timestamp: ev.Timestamp,
+			CgroupID:  ev.CgroupID,
 			Network: &api.NetworkEvent{
 				BaseEvent: api.BaseEvent{
 					Type:      api.EventTypeNetwork,
@@ -184,6 +218,7 @@ func (p *LinuxPlatform) monitorNetworkEvents(ctx context.Context) {
 					GID:       ev.GID,
 					Comm:      ev.Comm,
 					Timestamp: ev.Timestamp,
+					CgroupID:  ev.CgroupID,
 				},
 				Operation:  "connect",
 				Protocol:   protocol,

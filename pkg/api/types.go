@@ -32,6 +32,7 @@ type BaseEvent struct {
 	GID       uint32    `json:"gid"`
 	Comm      string    `json:"comm"`
 	Timestamp time.Time `json:"timestamp"`
+	CgroupID  uint64    `json:"cgroup_id,omitempty"`
 }
 
 // ProcessEvent represents a process execution event (execve)
@@ -73,10 +74,11 @@ type Event struct {
 	Timestamp time.Time `json:"timestamp"`
 
 	// Phase 3 fields
-	Type    EventType     `json:"type,omitempty"`
-	Process *ProcessEvent `json:"process,omitempty"`
-	File    *FileEvent    `json:"file,omitempty"`
-	Network *NetworkEvent `json:"network,omitempty"`
+	Type     EventType     `json:"type,omitempty"`
+	CgroupID uint64        `json:"cgroup_id,omitempty"`
+	Process  *ProcessEvent `json:"process,omitempty"`
+	File     *FileEvent    `json:"file,omitempty"`
+	Network  *NetworkEvent `json:"network,omitempty"`
 }
 
 // GetType returns the event type
@@ -145,6 +147,7 @@ type ActionResult struct {
 	Timestamp time.Time     // When decision was made
 	Cached    bool          // Was this from cache?
 	Latency   time.Duration // Evaluation latency
+	Audit     bool          // True if this deny was downgraded to log (audit mode)
 }
 
 // EnforcementStats tracks enforcement metrics
@@ -152,6 +155,7 @@ type EnforcementStats struct {
 	Allowed      uint64
 	Denied       uint64
 	Logged       uint64
+	AuditDenied  uint64
 	CacheHits    uint64
 	CacheMisses  uint64
 	TotalLatency time.Duration

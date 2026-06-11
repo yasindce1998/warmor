@@ -16,6 +16,14 @@ import (
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
+// Options configures the enforcer at startup
+type Options struct {
+	AuditMode    bool
+	CgroupFilter []string
+	MetricsPort  int
+	LogLevel     string
+}
+
 // Enforcer integrates platform-specific event capture (eBPF/ETW/ESF) with
 // WASM policy evaluation.
 type Enforcer struct {
@@ -29,19 +37,23 @@ type Enforcer struct {
 	logger        *logging.Logger
 	metricsServer *metrics.Server
 	policyPath    string
+	auditMode     bool
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 }
 
 // New creates a new enforcer instance with Phase 2 features
-func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer, error) {
+func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, error) {
 	hostname, _ := os.Hostname()
 
-	// Default metrics port
-	port := 9090
-	if len(metricsPort) > 0 {
-		port = metricsPort[0]
+	if opts == nil {
+		opts = &Options{}
+	}
+
+	port := opts.MetricsPort
+	if port == 0 {
+		port = 9090
 	}
 
 	// Initialize logger
@@ -50,7 +62,9 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 
 	// Initialize the platform-specific monitor (eBPF on Linux, ETW on
 	// Windows, ESF on macOS).
-	plat, err := platform.New()
+	plat, err := platform.New(platform.Config{
+		CgroupFilter: opts.CgroupFilter,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize platform: %w", err)
 	}
@@ -105,7 +119,7 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 	logger.LogInfo("✓ Decision cache initialized (10k entries, 5min TTL)")
 
 	// Initialize action handler
-	actionHandler := NewActionHandler()
+	actionHandler := NewActionHandler(opts.AuditMode)
 
 	// Initialize metrics server
 	metricsServer := metrics.NewServer(port)
@@ -123,6 +137,7 @@ func New(ctx context.Context, policyPath string, metricsPort ...int) (*Enforcer,
 		logger:        logger,
 		metricsServer: metricsServer,
 		policyPath:    policyPath,
+		auditMode:     opts.AuditMode,
 		ctx:           ctx,
 		cancel:        cancel,
 	}, nil
@@ -208,13 +223,16 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 
 	// Log the event
 	e.logger.LogEvent(event, result)
-	if result.Action == api.ActionDeny {
+	if result.Action == api.ActionDeny && !result.Audit {
 		e.logger.LogDenial(event, result)
 	}
 
 	// Record metrics
 	metrics.RecordEvent(result.Action.String())
 	metrics.RecordLatency(float64(result.Latency.Microseconds()))
+	if result.Audit {
+		metrics.RecordAuditDenied()
+	}
 
 	// Update cache size metric
 	cacheStats := e.cache.Stats()
@@ -230,6 +248,7 @@ func (e *Enforcer) GetStats() api.EnforcementStats {
 		Allowed:     actionStats.Allowed,
 		Denied:      actionStats.Denied,
 		Logged:      actionStats.Logged,
+		AuditDenied: actionStats.AuditDenied,
 		CacheHits:   cacheStats.TotalHits,
 		CacheMisses: actionStats.Allowed + actionStats.Denied + actionStats.Logged - cacheStats.TotalHits,
 	}
@@ -266,6 +285,9 @@ func (e *Enforcer) PrintStats() {
 	fmt.Printf("Allowed: %d (%.1f%%)\n", stats.Allowed, allowedPct)
 	fmt.Printf("Denied: %d (%.1f%%)\n", stats.Denied, deniedPct)
 	fmt.Printf("Logged: %d (%.1f%%)\n", stats.Logged, loggedPct)
+	if stats.AuditDenied > 0 {
+		fmt.Printf("Audit Denied: %d (would-be denials logged)\n", stats.AuditDenied)
+	}
 	fmt.Printf("Cache Hits: %d\n", stats.CacheHits)
 	fmt.Printf("Cache Misses: %d\n", stats.CacheMisses)
 	fmt.Printf("Cache Hit Rate: %.2f%%\n", cacheHitRate)
