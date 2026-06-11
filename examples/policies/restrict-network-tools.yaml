@@ -1,0 +1,69 @@
+name: restrict-network-tools
+version: 1
+description: "Block network reconnaissance and data exfiltration tools for non-root users"
+
+variables:
+  recon_tools:
+    - "/usr/bin/nmap"
+    - "/usr/bin/masscan"
+    - "/usr/bin/zmap"
+    - "/usr/sbin/tcpdump"
+    - "/usr/bin/tcpdump"
+    - "/usr/bin/wireshark"
+    - "/usr/bin/tshark"
+  exfil_tools:
+    - "/usr/bin/nc"
+    - "/usr/bin/ncat"
+    - "/usr/bin/netcat"
+    - "/usr/bin/socat"
+    - "/usr/bin/curl"
+    - "/usr/bin/wget"
+    - "/usr/bin/scp"
+    - "/usr/bin/rsync"
+    - "/usr/bin/ftp"
+    - "/usr/bin/sftp"
+  tunnel_tools:
+    - "/usr/bin/ssh"
+    - "/usr/bin/stunnel"
+    - "/usr/bin/chisel"
+    - "/usr/bin/ngrok"
+    - "/usr/local/bin/ngrok"
+
+rules:
+  - name: block-network-recon
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $recon_tools }
+    action: deny
+    reason: "Network scanning tool blocked"
+
+  - name: block-data-exfil-tools
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $exfil_tools }
+    action: deny
+    reason: "Data exfiltration tool blocked"
+
+  - name: block-tunnel-tools
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $tunnel_tools }
+    action: deny
+    reason: "Network tunneling tool blocked"
+
+  - name: audit-root-network-tools
+    event: process
+    conditions:
+      all:
+        - uid: { equals: 0 }
+        - path: { any_of: $recon_tools }
+    action: audit
+    reason: "Root using network scanning tool"
+
+default_action: allow

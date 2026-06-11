@@ -1,0 +1,71 @@
+name: prevent-container-escape
+version: 1
+description: "Block common container escape and privilege escalation techniques"
+
+variables:
+  escape_tools:
+    - "/usr/bin/nsenter"
+    - "/usr/bin/unshare"
+    - "/usr/bin/chroot"
+    - "/usr/sbin/chroot"
+  sensitive_mounts:
+    - "/proc/sys/**"
+    - "/proc/sysrq-trigger"
+    - "/sys/kernel/**"
+    - "/sys/fs/cgroup/**"
+  dangerous_paths:
+    - "/var/run/docker.sock"
+    - "/run/docker.sock"
+    - "/var/run/containerd/containerd.sock"
+    - "/run/containerd/containerd.sock"
+    - "/var/run/crio/crio.sock"
+
+rules:
+  - name: block-namespace-escape
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $escape_tools }
+    action: deny
+    reason: "Namespace manipulation tool blocked"
+
+  - name: block-container-runtime-access
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $dangerous_paths }
+    action: deny
+    reason: "Direct container runtime socket access"
+
+  - name: block-sensitive-proc-write
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { glob: "/proc/sys/**" }
+        - operation: "write"
+    action: deny
+    reason: "Write to /proc/sys blocked"
+
+  - name: block-sysfs-kernel-write
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { glob: "/sys/kernel/**" }
+        - operation: "write"
+    action: deny
+    reason: "Write to /sys/kernel blocked"
+
+  - name: audit-root-namespace-tools
+    event: process
+    conditions:
+      all:
+        - uid: { equals: 0 }
+        - path: { any_of: $escape_tools }
+    action: audit
+    reason: "Root using namespace tools"
+
+default_action: allow

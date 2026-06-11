@@ -1,0 +1,65 @@
+name: block-crypto-miners
+version: 1
+description: "Detect and block cryptocurrency mining processes"
+
+variables:
+  miner_binaries:
+    - "/usr/bin/xmrig"
+    - "/usr/local/bin/xmrig"
+    - "/tmp/xmrig"
+    - "/usr/bin/minerd"
+    - "/usr/local/bin/minerd"
+    - "/usr/bin/cpuminer"
+    - "/opt/ethminer"
+    - "/usr/bin/ccminer"
+    - "/usr/bin/bfgminer"
+    - "/usr/bin/cgminer"
+  miner_names:
+    - "xmrig"
+    - "minerd"
+    - "cpuminer"
+    - "ethminer"
+    - "ccminer"
+    - "bfgminer"
+    - "cgminer"
+    - "nbminer"
+    - "t-rex"
+    - "phoenixminer"
+  mining_ports:
+    - 3333
+    - 3334
+    - 4444
+    - 5555
+    - 7777
+    - 8888
+    - 9999
+    - 14433
+    - 14444
+    - 45700
+
+rules:
+  - name: block-known-miner-binaries
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $miner_binaries }
+    action: deny
+    reason: "Known cryptocurrency miner binary"
+
+  - name: block-miner-by-name
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: $miner_names }
+    action: deny
+    reason: "Process name matches known miner"
+
+  - name: block-stratum-ports
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: $mining_ports }
+    action: deny
+    reason: "Connection to known mining pool port"
+
+default_action: allow

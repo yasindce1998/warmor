@@ -1,0 +1,103 @@
+name: kubernetes-hardening
+version: 1
+description: "Comprehensive Kubernetes workload hardening - blocks common attack vectors"
+
+variables:
+  blocked_bins:
+    - "/usr/bin/nc"
+    - "/usr/bin/ncat"
+    - "/usr/bin/socat"
+    - "/usr/bin/curl"
+    - "/usr/bin/wget"
+  escape_tools:
+    - "/usr/bin/nsenter"
+    - "/usr/bin/unshare"
+    - "/usr/bin/chroot"
+    - "/usr/sbin/chroot"
+  package_managers:
+    - "/usr/bin/apt"
+    - "/usr/bin/apt-get"
+    - "/usr/bin/dpkg"
+    - "/usr/bin/yum"
+    - "/usr/bin/rpm"
+    - "/usr/bin/dnf"
+    - "/usr/bin/apk"
+    - "/usr/bin/pip"
+    - "/usr/bin/pip3"
+  debug_tools:
+    - "/usr/bin/gdb"
+    - "/usr/bin/strace"
+    - "/usr/bin/ltrace"
+    - "/usr/bin/ptrace"
+
+rules:
+  - name: block-tmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    action: deny
+    reason: "Execution from temp directory"
+
+  - name: block-devshm-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/dev/shm/**" }
+    action: deny
+    reason: "Execution from shared memory"
+
+  - name: block-network-tools
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $blocked_bins }
+    action: deny
+    reason: "Network tool blocked in container"
+
+  - name: block-container-escape
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $escape_tools }
+    action: deny
+    reason: "Container escape tool blocked"
+
+  - name: block-package-install
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $package_managers }
+    action: deny
+    reason: "Package installation blocked in container"
+
+  - name: block-debug-tools
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $debug_tools }
+    action: deny
+    reason: "Debug tool blocked in container"
+
+  - name: block-docker-sock
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/run/docker.sock" }
+    action: deny
+    reason: "Docker socket access blocked"
+
+  - name: block-etc-modification
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { glob: "/etc/**" }
+        - operation: { any_of: ["write", "unlink"] }
+    action: deny
+    reason: "System config modification blocked"
+
+default_action: allow

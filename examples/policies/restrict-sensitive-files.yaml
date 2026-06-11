@@ -1,0 +1,95 @@
+name: restrict-sensitive-files
+version: 1
+description: "Protect sensitive files and directories from unauthorized access"
+
+variables:
+  credential_files:
+    - "/etc/shadow"
+    - "/etc/gshadow"
+    - "/etc/sudoers"
+    - "/etc/security/opasswd"
+  ssh_dirs:
+    - "/root/.ssh/**"
+    - "/home/**/.ssh/**"
+  kube_configs:
+    - "/root/.kube/**"
+    - "/home/**/.kube/**"
+    - "/var/run/secrets/kubernetes.io/**"
+  cloud_credentials:
+    - "/root/.aws/**"
+    - "/home/**/.aws/**"
+    - "/root/.gcp/**"
+    - "/home/**/.gcp/**"
+    - "/root/.azure/**"
+    - "/home/**/.azure/**"
+
+rules:
+  - name: block-shadow-read
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $credential_files }
+        - operation: "read"
+    action: deny
+    reason: "Unauthorized read of credential file"
+
+  - name: block-shadow-write
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $credential_files }
+        - operation: "write"
+    action: deny
+    reason: "Unauthorized write to credential file"
+
+  - name: audit-ssh-key-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/**/.ssh/**" }
+        - operation: "read"
+    action: audit
+    reason: "SSH key file accessed"
+
+  - name: block-kube-token-theft
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { glob: "/var/run/secrets/kubernetes.io/**" }
+        - operation: "read"
+    action: deny
+    reason: "Service account token access by non-root"
+
+  - name: audit-cloud-creds
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/**/.aws/**" }
+        - operation: "read"
+    action: audit
+    reason: "Cloud credential file accessed"
+
+  - name: block-etc-passwd-write
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { equals: "/etc/passwd" }
+        - operation: "write"
+    action: deny
+    reason: "Unauthorized write to /etc/passwd"
+
+  - name: block-cron-tampering
+    event: file
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { glob: "/etc/cron*/**" }
+        - operation: { any_of: ["write", "unlink"] }
+    action: deny
+    reason: "Cron file modification by non-root"
+
+default_action: allow

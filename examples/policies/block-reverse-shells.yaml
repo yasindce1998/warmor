@@ -1,0 +1,88 @@
+name: block-reverse-shells
+version: 1
+description: "Detect and block common reverse shell patterns and suspicious interpreters"
+
+variables:
+  shell_interpreters:
+    - "/bin/bash"
+    - "/bin/sh"
+    - "/bin/dash"
+    - "/bin/zsh"
+    - "/usr/bin/bash"
+    - "/usr/bin/sh"
+    - "/usr/bin/zsh"
+  script_interpreters:
+    - "/usr/bin/python"
+    - "/usr/bin/python3"
+    - "/usr/bin/perl"
+    - "/usr/bin/ruby"
+    - "/usr/bin/php"
+    - "/usr/bin/node"
+    - "/usr/local/bin/python3"
+    - "/usr/local/bin/node"
+  reverse_shell_ports:
+    - 4444
+    - 4445
+    - 4446
+    - 5555
+    - 1234
+    - 1337
+    - 31337
+    - 6666
+    - 6667
+    - 8080
+    - 9001
+
+rules:
+  - name: block-shell-from-tmp
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $shell_interpreters }
+        - uid: { not: 0 }
+    action: audit
+    reason: "Non-root shell execution"
+
+  - name: block-tmp-execution
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    action: deny
+    reason: "Execution from /tmp directory"
+
+  - name: block-devshm-execution
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/dev/shm/**" }
+    action: deny
+    reason: "Execution from /dev/shm"
+
+  - name: block-vartmp-execution
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/var/tmp/**" }
+    action: deny
+    reason: "Execution from /var/tmp"
+
+  - name: block-common-callback-ports
+    event: network
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - remote_port: { any_of: $reverse_shell_ports }
+    action: deny
+    reason: "Outbound connection to common reverse shell port"
+
+  - name: audit-script-interpreters
+    event: process
+    conditions:
+      all:
+        - uid: { not: 0 }
+        - path: { any_of: $script_interpreters }
+    action: audit
+    reason: "Non-root script interpreter execution"
+
+default_action: allow
