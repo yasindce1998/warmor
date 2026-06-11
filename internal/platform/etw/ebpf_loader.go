@@ -44,9 +44,7 @@ var (
 	procEbpfLoadProgram   = ebpfApiDll.NewProc("ebpf_load_program")
 	procEbpfAttachProgram = ebpfApiDll.NewProc("ebpf_attach_program")
 	procEbpfDetachProgram = ebpfApiDll.NewProc("ebpf_detach_program")
-	procEbpfCreateMap     = ebpfApiDll.NewProc("ebpf_create_map")
-	procEbpfMapLookup     = ebpfApiDll.NewProc("ebpf_map_lookup_elem")
-	procEbpfMapUpdate     = ebpfApiDll.NewProc("ebpf_map_update_elem")
+	procEbpfCreateMap = ebpfApiDll.NewProc("ebpf_create_map")
 )
 
 // EBPFLoader manages eBPF-for-Windows programs
