@@ -187,9 +187,11 @@ func TestLSM_FileOpenBlocked(t *testing.T) {
 		t.Fatalf("write test file: %v", err)
 	}
 
-	// Insert deny rule for file open
+	// Insert deny rule for file open — BPF file_open hook only sees the
+	// dentry name (basename), not the full path, so hash against basename.
+	baseName := filepath.Base(testFile)
 	pm := loader.PolicyMap()
-	if err := pm.SetRule(0, EventTypeFile, testFile, ActionDeny, false); err != nil {
+	if err := pm.SetRule(0, EventTypeFile, baseName, ActionDeny, false); err != nil {
 		t.Fatalf("SetRule deny: %v", err)
 	}
 
@@ -203,7 +205,7 @@ func TestLSM_FileOpenBlocked(t *testing.T) {
 	}
 
 	// Clean up
-	pm.DeleteRule(0, EventTypeFile, testFile)
+	pm.DeleteRule(0, EventTypeFile, baseName)
 	loader.SetEnforceMode(false)
 }
 
