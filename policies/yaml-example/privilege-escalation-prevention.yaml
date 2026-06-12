@@ -1,0 +1,118 @@
+name: privilege-escalation-prevention
+version: 1
+description: "Detect and block common privilege escalation techniques"
+
+variables:
+  setuid_binaries:
+    - "/usr/bin/passwd"
+    - "/usr/bin/chfn"
+    - "/usr/bin/chsh"
+    - "/usr/bin/newgrp"
+    - "/usr/sbin/unix_chkpwd"
+  dangerous_suid_tools:
+    - "/usr/bin/pkexec"
+    - "/usr/bin/at"
+    - "/usr/sbin/userhelper"
+    - "/usr/lib/dbus-1.0/dbus-daemon-launch-helper"
+  sudo_abuse_commands:
+    - "/usr/bin/find"
+    - "/usr/bin/vim"
+    - "/usr/bin/vi"
+    - "/usr/bin/nmap"
+    - "/usr/bin/python"
+    - "/usr/bin/python3"
+    - "/usr/bin/perl"
+    - "/usr/bin/ruby"
+    - "/usr/bin/awk"
+    - "/usr/bin/less"
+    - "/usr/bin/man"
+  kernel_exploit_paths:
+    - "/tmp/exploit*"
+    - "/tmp/dirty*"
+    - "/tmp/pwn*"
+    - "/dev/shm/exploit*"
+    - "/dev/shm/root*"
+
+rules:
+  - name: block-dangerous-suid
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $dangerous_suid_tools }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Execution of dangerous SUID binary (privilege escalation vector)"
+
+  - name: audit-sudo-invocation
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/usr/bin/sudo", "/usr/bin/su", "/usr/bin/doas"] }
+    action: audit
+    reason: "Privilege elevation command executed"
+
+  - name: block-exploit-from-tmp
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/exploit*" }
+    action: deny
+    reason: "Exploit execution from /tmp"
+
+  - name: block-exploit-from-devshm
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/dev/shm/*" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Binary execution from /dev/shm (exploit staging)"
+
+  - name: block-writable-suid-creation
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+        - operation: { equals: "chmod" }
+    action: audit
+    reason: "Chmod in /tmp (possible SUID bit setting)"
+
+  - name: audit-crontab-modification
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/spool/cron/**" }
+        - operation: { any_of: ["write", "unlink"] }
+    action: audit
+    reason: "Crontab modification (persistence/escalation technique)"
+
+  - name: audit-systemd-service-creation
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/systemd/system/*.service" }
+        - operation: "write"
+    action: audit
+    reason: "Systemd service creation (persistence/escalation)"
+
+  - name: block-ld-preload-write
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/etc/ld.so.preload", "/etc/ld.so.conf"] }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LD_PRELOAD hijack attempt"
+
+  - name: block-pam-modification
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/pam.d/*" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "PAM configuration modification (auth bypass attempt)"
+
+default_action: allow

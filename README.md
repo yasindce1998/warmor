@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26.2+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Phase%205%20Complete-brightgreen)](docs/OVERVIEW.md)
+[![Status](https://img.shields.io/badge/Status-Phase%206%20In%20Progress-blue)](docs/OVERVIEW.md)
 [![Linux](https://img.shields.io/badge/Linux-Production-brightgreen)](docs/PLATFORM_LINUX.md)
 [![Windows](https://img.shields.io/badge/Windows-Beta%2FETW%2BeBPF-yellow)](docs/PLATFORM_WINDOWS.md)
 [![macOS](https://img.shields.io/badge/macOS-Beta%2FESF-yellow)](docs/PLATFORM_MACOS.md)
@@ -62,6 +62,9 @@ sudo ./warmor-daemon -policy policy.wasm
 
 # Or pass YAML directly (auto-compiles if Rust toolchain present)
 sudo ./warmor-daemon -policy policy.yaml
+
+# Enable kernel-level enforcement (Linux 5.7+ with CONFIG_BPF_LSM)
+sudo ./warmor-daemon -policy policy.yaml --lsm-enforce
 ```
 
 ---
@@ -69,7 +72,9 @@ sudo ./warmor-daemon -policy policy.yaml
 ## Key Features
 
 - **Cross-Platform:** Same policy works on Linux (eBPF), Windows (ETW+eBPF), and macOS (ESF)
+- **LSM-BPF Kernel Enforcement:** Synchronous blocking at the kernel security boundary — denied operations never execute (Linux 5.7+, `CONFIG_BPF_LSM`)
 - **YAML Policy DSL:** Declarative rules with conditions, glob matching, variables — compiled to WASM
+- **Two-Tier Fast Path:** WASM decisions are compiled into BPF hash maps; subsequent identical events are handled entirely in kernel without a userspace round-trip
 - **Safe:** WASM sandbox prevents policy bugs from crashing the system
 - **Hot-Reload:** Update policies via SIGHUP without restarting
 - **High Performance:** <100us P95 latency, 10k-entry LRU cache with >90% hit rate
@@ -117,5 +122,5 @@ warmor is licensed under the [MIT License](LICENSE).
 
 ---
 
-**Version:** 1.1.0-beta (Phase 5 Complete)  
+**Version:** 1.2.0-beta (Phase 6 In Progress — LSM-BPF Kernel Enforcement)  
 **Contact:** [GitHub Issues](https://github.com/yasindce1998/warmor/issues) | [Discussions](https://github.com/yasindce1998/warmor/discussions)

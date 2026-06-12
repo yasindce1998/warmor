@@ -1,0 +1,116 @@
+name: sensitive-file-protection
+version: 1
+description: "Protect sensitive files from unauthorized access and modification"
+
+variables:
+  credential_files:
+    - "/etc/shadow"
+    - "/etc/gshadow"
+    - "/etc/sudoers"
+    - "/etc/sudoers.d/*"
+  ssh_key_paths:
+    - "/root/.ssh/*"
+    - "/home/*/.ssh/id_*"
+    - "/home/*/.ssh/authorized_keys"
+    - "/etc/ssh/ssh_host_*"
+  cloud_credential_paths:
+    - "/root/.aws/credentials"
+    - "/home/*/.aws/credentials"
+    - "/root/.azure/accessTokens.json"
+    - "/home/*/.azure/accessTokens.json"
+    - "/root/.config/gcloud/credentials.db"
+    - "/home/*/.config/gcloud/credentials.db"
+    - "/var/run/secrets/kubernetes.io/serviceaccount/token"
+  crypto_key_paths:
+    - "/etc/ssl/private/*"
+    - "/etc/pki/tls/private/*"
+    - "*.key"
+    - "*.pem"
+  history_files:
+    - "/root/.bash_history"
+    - "/home/*/.bash_history"
+    - "/root/.zsh_history"
+    - "/home/*/.zsh_history"
+
+rules:
+  - name: block-shadow-read
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/etc/shadow", "/etc/gshadow"] }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to password shadow file"
+
+  - name: audit-sudoers-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/sudoers*" }
+    action: audit
+    reason: "Access to sudoers configuration"
+
+  - name: block-ssh-key-theft
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/*/.ssh/id_*" }
+        - uid: { not: 0 }
+        - operation: "read"
+    action: deny
+    reason: "Reading another user's SSH private key"
+
+  - name: audit-root-ssh-keys
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.ssh/*" }
+    action: audit
+    reason: "Access to root SSH keys"
+
+  - name: block-cloud-cred-access
+    event: file
+    conditions:
+      all:
+        - path: { any_of: $cloud_credential_paths }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to cloud credentials"
+
+  - name: audit-k8s-token-read
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/var/run/secrets/kubernetes.io/serviceaccount/token" }
+    action: audit
+    reason: "Kubernetes service account token read"
+
+  - name: block-tls-key-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/ssl/private/*" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to TLS private keys"
+
+  - name: audit-history-access
+    event: file
+    conditions:
+      all:
+        - path: { any_of: $history_files }
+        - operation: "read"
+    action: audit
+    reason: "Shell history file read (credential harvesting indicator)"
+
+  - name: block-etc-passwd-write
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/etc/passwd", "/etc/group"] }
+        - operation: { any_of: ["write", "unlink"] }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root modification of passwd/group files"
+
+default_action: allow

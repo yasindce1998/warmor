@@ -121,6 +121,24 @@ helm upgrade warmor deploy/helm/warmor \
   --set daemon.auditMode=false
 ```
 
+## 5. Enable LSM-BPF Kernel Enforcement (Optional)
+
+For synchronous kernel-level blocking (denied operations never execute):
+
+```bash
+helm upgrade warmor deploy/helm/warmor \
+  --namespace warmor-system \
+  --set daemon.auditMode=false \
+  --set daemon.lsmEnforce=true
+```
+
+**Requirements:** Linux kernel 5.7+ with `CONFIG_BPF_LSM=y`. If your kernel doesn't support LSM-BPF, warmor automatically falls back to tracepoint-only mode.
+
+**Standalone:**
+```bash
+sudo warmor-daemon --policy policy.yaml --lsm-enforce
+```
+
 ## What's Next
 
 | Goal | Guide |

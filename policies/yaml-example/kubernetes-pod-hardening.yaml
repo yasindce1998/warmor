@@ -1,0 +1,121 @@
+name: kubernetes-pod-hardening
+version: 1
+description: "Harden Kubernetes pods against common attack patterns"
+
+variables:
+  kubectl_paths:
+    - "/usr/local/bin/kubectl"
+    - "/usr/bin/kubectl"
+    - "/usr/local/bin/oc"
+    - "/usr/bin/oc"
+  package_managers:
+    - "/usr/bin/apt"
+    - "/usr/bin/apt-get"
+    - "/usr/bin/dpkg"
+    - "/usr/bin/yum"
+    - "/usr/bin/dnf"
+    - "/usr/bin/rpm"
+    - "/usr/bin/apk"
+    - "/usr/bin/pip"
+    - "/usr/bin/pip3"
+    - "/usr/local/bin/pip"
+    - "/usr/local/bin/pip3"
+  shell_binaries:
+    - "/bin/bash"
+    - "/bin/sh"
+    - "/bin/zsh"
+    - "/bin/dash"
+    - "/usr/bin/bash"
+    - "/usr/bin/sh"
+    - "/usr/bin/zsh"
+  reverse_shell_tools:
+    - "/usr/bin/nc"
+    - "/usr/bin/ncat"
+    - "/usr/bin/socat"
+    - "/usr/bin/telnet"
+
+rules:
+  - name: block-kubectl-in-pod
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $kubectl_paths }
+    action: deny
+    reason: "kubectl execution inside pod (lateral movement risk)"
+
+  - name: block-package-install
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $package_managers }
+    action: deny
+    reason: "Package manager in production pod (supply chain risk)"
+
+  - name: audit-shell-spawn
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $shell_binaries }
+    action: audit
+    reason: "Shell spawned in pod"
+
+  - name: block-reverse-shell-tools
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $reverse_shell_tools }
+    action: deny
+    reason: "Reverse shell tool execution"
+
+  - name: block-kube-api-token-read
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/var/run/secrets/kubernetes.io/serviceaccount/token" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to Kubernetes service account token"
+
+  - name: block-kube-config-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.kube/config" }
+    action: deny
+    reason: "Kubeconfig access in container"
+
+  - name: audit-etc-hosts-modify
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/hosts" }
+        - operation: "write"
+    action: audit
+    reason: "Modification of /etc/hosts (DNS poisoning in pod)"
+
+  - name: audit-resolv-conf-modify
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/resolv.conf" }
+        - operation: "write"
+    action: audit
+    reason: "DNS configuration change in pod"
+
+  - name: block-metadata-service
+    event: network
+    conditions:
+      all:
+        - remote_ip: { equals: "169.254.169.254" }
+    action: deny
+    reason: "Cloud metadata service access (SSRF/credential theft)"
+
+  - name: block-kube-api-direct
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 6443 }
+    action: audit
+    reason: "Direct Kubernetes API server connection"
+
+default_action: allow

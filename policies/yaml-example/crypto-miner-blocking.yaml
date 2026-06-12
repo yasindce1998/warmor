@@ -1,0 +1,78 @@
+name: crypto-miner-blocking
+version: 1
+description: "Detect and block cryptocurrency mining processes and connections"
+
+variables:
+  miner_binaries:
+    - "/usr/bin/xmrig"
+    - "/usr/local/bin/xmrig"
+    - "/tmp/xmrig"
+    - "/usr/bin/minerd"
+    - "/usr/local/bin/minerd"
+    - "/usr/bin/cpuminer"
+    - "/opt/ethminer"
+    - "/usr/bin/bfgminer"
+    - "/usr/bin/cgminer"
+  miner_comm_names:
+    - "xmrig"
+    - "minerd"
+    - "cpuminer"
+    - "ethminer"
+    - "bfgminer"
+    - "cgminer"
+    - "cryptonight"
+    - "stratum"
+  mining_pools_ports:
+    - 3333
+    - 3334
+    - 4444
+    - 5555
+    - 7777
+    - 8888
+    - 9999
+    - 14433
+    - 14444
+    - 45700
+
+rules:
+  - name: block-known-miners
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $miner_binaries }
+    action: deny
+    reason: "Known cryptocurrency miner binary"
+
+  - name: block-miner-from-tmp
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/*miner*" }
+    action: deny
+    reason: "Miner execution from /tmp"
+
+  - name: block-miner-from-devshm
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/dev/shm/*" }
+    action: deny
+    reason: "Execution from /dev/shm (common miner drop location)"
+
+  - name: log-mining-pool-connections
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: $mining_pools_ports }
+    action: deny
+    reason: "Connection to known mining pool port"
+
+  - name: log-stratum-protocol
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [3333, 3334] }
+    action: deny
+    reason: "Stratum mining protocol port"
+
+default_action: allow

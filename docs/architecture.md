@@ -1,8 +1,8 @@
 # warmor Architecture
 
-**Version:** 1.1.0-beta  
-**Last Updated:** 2026-06-10  
-**Status:** Phase 5 Complete
+**Version:** 1.2.0-beta  
+**Last Updated:** 2026-06-12  
+**Status:** Phase 6 In Progress (LSM-BPF Kernel Enforcement)
 
 ---
 
@@ -96,6 +96,7 @@ type Platform interface {
     Stop() error
     Close() error
     Capabilities() Capabilities
+    PolicyMap() any
 }
 
 type Capabilities struct {
@@ -103,6 +104,7 @@ type Capabilities struct {
     FileMonitoring    bool
     NetworkMonitoring bool
     Enforcement       bool
+    LSMEnforcement    bool
 }
 ```
 
@@ -268,6 +270,60 @@ Application → Syscall → eBPF Hook → Ring Buffer → warmor Daemon → WASM
 
 **Documentation:** [PLATFORM_LINUX.md](PLATFORM_LINUX.md)
 
+### LSM-BPF Kernel Enforcement (Linux 5.7+)
+
+**Architecture:**
+```
+Application → Syscall → LSM Hook → Policy Map Lookup
+  ├─ HIT + DENY  → return -EPERM (blocked in kernel, zero userspace latency)
+  ├─ HIT + ALLOW → return 0 (permitted, no userspace trip)
+  └─ MISS        → emit to ringbuf → WASM evaluates → decision compiled back into policy map
+```
+
+Unlike tracepoint-based monitoring which observes syscalls after they begin, LSM-BPF hooks are **synchronous** — they execute inline within the kernel security path and can return `-EPERM` to block an operation before it completes.
+
+**LSM Programs:**
+- `lsm_exec.bpf.c` — `bprm_check_security` hook (blocks exec before binary loads)
+- `lsm_file.bpf.c` — `file_open` hook (blocks file access before open completes)
+- `lsm_connect.bpf.c` — `socket_connect` hook (blocks connections before handshake)
+
+**Policy Map (BPF_MAP_TYPE_HASH):**
+```c
+struct policy_key {
+    __u64 cgroup_id;    // 0 = global rule
+    __u32 rule_hash;    // FNV-1a hash of filename/pattern
+    __u8  event_type;   // 0=exec, 1=file, 2=net
+};
+
+struct policy_value {
+    __u8  action;       // 0=allow, 1=deny
+    __u8  audit;        // 1=log even if allowed
+    __u32 hit_count;    // for metrics
+};
+```
+
+**Two-Tier Lookup:**
+1. Cgroup-specific: `policy_map[{cgroup_id, hash, type}]`
+2. Global fallback: `policy_map[{0, hash, type}]`
+
+**WASM→BPF Feedback Loop:**
+```
+First occurrence:  LSM miss → ringbuf → WASM evaluates → write decision to policy_map
+Second occurrence: LSM hit → kernel allows/denies immediately (no userspace trip)
+```
+
+**Graceful Fallback:** If `CONFIG_BPF_LSM` is absent or the kernel lacks LSM-BPF support, the system falls back to tracepoint-only mode with a warning. The `--lsm-enforce` flag controls whether deny decisions are enforced or audit-only.
+
+**Implementation Files:**
+- `bpf/warmor_lsm.h` — Shared structs, maps, FNV-1a hash helper
+- `bpf/lsm_exec.bpf.c` — Exec enforcement
+- `bpf/lsm_file.bpf.c` — File access enforcement
+- `bpf/lsm_connect.bpf.c` — Network enforcement
+- `internal/ebpf/lsm_loader.go` — Go LSM program loader
+- `internal/ebpf/policy_map.go` — Policy map manager (userspace↔BPF)
+
+---
+
 ### Windows (ETW + eBPF-for-Windows) - Beta 🚧
 
 **Dual-Mode Architecture:**
@@ -390,14 +446,34 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 ```
 1. Receive decision from WASM
    ↓
-2. If ALLOW → Allow syscall to proceed
+2. Compile decision into BPF policy map (if LSM active)
    ↓
-3. If DENY → Block syscall (platform-specific)
-   ├─ Linux: Return error from eBPF
+3. If ALLOW → Allow syscall to proceed
+   ↓
+4. If DENY → Block syscall (platform-specific)
+   ├─ Linux (LSM): Already blocked in kernel via -EPERM (synchronous)
+   ├─ Linux (tracepoint): Return error from eBPF
    ├─ Windows: Terminate process (eBPF mode)
    └─ macOS: Respond with ES_AUTH_RESULT_DENY
    ↓
-4. If LOG → Allow but log event
+5. If LOG → Allow but log event
+```
+
+### LSM Kernel Fast-Path (Linux only)
+
+```
+1. LSM hook fires (bprm_check_security / file_open / socket_connect)
+   ↓
+2. Compute FNV-1a hash of filename/pattern
+   ↓
+3. Lookup policy_map[{cgroup_id, hash, event_type}]
+   ├─ HIT + action=DENY → return -EPERM (blocked, emit audit event)
+   ├─ HIT + action=ALLOW → return 0
+   └─ MISS → emit event to lsm_events ringbuf, return 0 (default-allow)
+   ↓
+4. On MISS: userspace WASM evaluates → writes result back to policy_map
+   ↓
+5. Next identical event → kernel fast-path (no userspace trip)
 ```
 
 ---
@@ -568,11 +644,18 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 
 ## Future Enhancements
 
-### Phase 6: Advanced Features ⏳ (Planned)
+### Phase 6: LSM-BPF Kernel Enforcement ✅ (In Progress)
+- Synchronous kernel-level blocking via LSM-BPF hooks
+- BPF hash map policy cache with WASM→BPF feedback loop
+- Cgroup-aware two-tier policy lookup (per-container + global)
+- FNV-1a hashing for O(1) pattern matching in BPF context
+- Audit-only mode via `lsm_enforce` toggle
+- Graceful fallback to tracepoint-only on unsupported kernels
+
+### Phase 7: Advanced Features ⏳ (Planned)
 - Stateful policy engine with process lineage tracking
 - Central policy management server for fleet management
 - A/B testing framework for policy changes
-- Advanced enforcement (network filtering, encryption)
 - SIEM integration for security event streaming
 
 ---
@@ -596,6 +679,6 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 
 ---
 
-**Last Updated:** 2026-06-10  
-**Version:** 1.1.0-beta  
-**Status:** Phase 5 Complete
+**Last Updated:** 2026-06-12  
+**Version:** 1.2.0-beta  
+**Status:** Phase 6 In Progress (LSM-BPF Kernel Enforcement)

@@ -1,0 +1,107 @@
+name: container-escape-prevention
+version: 1
+description: "Prevent common container escape techniques and breakout attempts"
+
+variables:
+  escape_tools:
+    - "/usr/bin/nsenter"
+    - "/usr/bin/unshare"
+    - "/usr/bin/chroot"
+    - "/usr/sbin/chroot"
+    - "/usr/bin/mount"
+    - "/usr/bin/umount"
+    - "/bin/mount"
+    - "/bin/umount"
+  debugger_tools:
+    - "/usr/bin/gdb"
+    - "/usr/bin/strace"
+    - "/usr/bin/ltrace"
+    - "/usr/bin/ptrace"
+    - "/usr/bin/perf"
+  sensitive_host_paths:
+    - "/proc/*/ns/*"
+    - "/proc/sysrq-trigger"
+    - "/proc/sys/kernel/*"
+    - "/sys/fs/cgroup/**"
+    - "/var/run/docker.sock"
+    - "/run/containerd/containerd.sock"
+    - "/var/run/crio/crio.sock"
+
+rules:
+  - name: block-nsenter
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $escape_tools }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Namespace manipulation tool (container escape vector)"
+
+  - name: block-debuggers
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $debugger_tools }
+    action: deny
+    reason: "Debugger/tracer in container (ptrace escape vector)"
+
+  - name: block-docker-socket-access
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/var/run/docker.sock" }
+    action: deny
+    reason: "Docker socket access (container escape via API)"
+
+  - name: block-containerd-socket
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/run/containerd/containerd.sock" }
+    action: deny
+    reason: "Containerd socket access (container escape via API)"
+
+  - name: block-proc-namespace-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/proc/*/ns/*" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Access to process namespace files (escape vector)"
+
+  - name: block-sysrq
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/proc/sysrq-trigger" }
+    action: deny
+    reason: "SysRq trigger access (host manipulation)"
+
+  - name: block-kernel-params-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/proc/sys/kernel/**" }
+        - operation: { any_of: ["write", "unlink"] }
+    action: deny
+    reason: "Write to kernel parameters"
+
+  - name: block-cgroup-escape
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/sys/fs/cgroup/**/release_agent" }
+        - operation: "write"
+    action: deny
+    reason: "Cgroup release_agent write (known escape technique)"
+
+  - name: log-sensitive-mounts
+    event: process
+    conditions:
+      all:
+        - comm: { equals: "mount" }
+    action: audit
+    reason: "Mount operation in container"
+
+default_action: allow

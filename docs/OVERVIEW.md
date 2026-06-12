@@ -1,8 +1,8 @@
 # warmor Project Status
 
-**Version:** 1.1.0-beta  
-**Last Updated:** 2026-06-10  
-**Status:** Phase 5 Complete
+**Version:** 1.2.0-beta  
+**Last Updated:** 2026-06-12  
+**Status:** Phase 6 In Progress (LSM-BPF Kernel Enforcement)
 
 ---
 
@@ -10,7 +10,7 @@
 
 | Platform | Status | Technology | Enforcement |
 |----------|--------|------------|-------------|
-| **Linux** | Production | eBPF | Yes |
+| **Linux** | Production | eBPF + LSM-BPF | Yes (kernel-level) |
 | **Windows** | Beta | ETW + eBPF-for-Windows | Planned (eBPF mode) |
 | **macOS** | Beta | ESF | Yes (AUTH events) |
 
@@ -49,11 +49,19 @@
 - Grafana dashboards (events, latency, cache, errors)
 - Codebase hardening and security audit
 
-### Phase 6: Advanced Features — PLANNED
+### Phase 6: LSM-BPF Kernel Enforcement — IN PROGRESS
+- LSM-BPF synchronous hooks (bprm_check_security, file_open, socket_connect)
+- BPF_MAP_TYPE_HASH policy map with FNV-1a hashed keys
+- Cgroup-aware two-tier lookup (per-container + global fallback)
+- WASM→BPF feedback loop: first hit evaluated by WASM, compiled to map, subsequent hits handled in kernel
+- Ring buffer for kernel→userspace event delivery on policy miss
+- `--lsm-enforce` flag for audit-only vs enforce mode
+- Graceful fallback to tracepoint-only when CONFIG_BPF_LSM absent
+
+### Phase 7: Advanced Features — PLANNED
 - Stateful policy engine with process lineage tracking
 - Central policy management server for fleet management
 - A/B testing framework for policy changes
-- Advanced enforcement (network filtering, encryption)
 - SIEM integration
 
 ---

@@ -83,6 +83,45 @@ rules:
 - Order rules from most specific to most general (first match wins)
 - The `reason` field appears in deny logs — make it actionable
 
+## LSM-BPF Kernel Enforcement
+
+When running with `--lsm-enforce`, deny rules are enforced synchronously at the kernel level via LSM-BPF hooks. This means:
+
+- **Denied exec operations return EPERM** — the process never starts
+- **Denied file opens fail immediately** — the file is never accessed
+- **Denied connections fail at connect()** — no network handshake occurs
+
+### How It Works
+
+1. The first time an event matches a deny rule, WASM evaluates it and the decision is compiled into a BPF hash map
+2. On subsequent identical events, the kernel LSM hook looks up the hash map and returns `-EPERM` without any userspace round-trip
+3. The hash key uses FNV-1a over the filename/pattern, scoped by cgroup ID and event type
+
+### Policy Design for LSM
+
+- **Glob patterns** (`/tmp/**`) are matched in userspace WASM on the first hit, then the specific filename that matched is hashed into the BPF map
+- **`any_of` lists** each element is individually hashed into the map after first evaluation
+- **Network rules** hash destination IP+port, so `remote_port: { any_of: [22, 4444] }` will populate map entries per observed connection
+- **Cgroup scoping** — rules apply per-cgroup by default; set cgroup_id=0 in the map for global rules
+
+### Audit vs Enforce Mode
+
+| Flag | Behavior |
+|------|----------|
+| `--lsm-enforce=false` (default) | LSM programs load but never deny — all events are observed and logged |
+| `--lsm-enforce=true` | LSM programs actively block denied operations in kernel |
+
+Start with audit mode to validate your policy won't disrupt workloads, then enable enforcement.
+
+### Requirements
+
+- Linux kernel 5.7+ with `CONFIG_BPF_LSM=y`
+- `/sys/kernel/security/lsm` must contain "bpf"
+- `CAP_SYS_ADMIN` + `CAP_BPF` (or root)
+- If requirements are not met, warmor falls back to tracepoint-only mode automatically
+
+---
+
 ## Validation
 
 Validate a policy locally before deploying:

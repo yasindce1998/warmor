@@ -1,0 +1,94 @@
+name: network-egress-control
+version: 1
+description: "Restrict outbound network connections to approved destinations only"
+
+variables:
+  allowed_dns_ports:
+    - 53
+    - 853
+  allowed_https_ports:
+    - 443
+    - 8443
+  internal_subnets:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  blocked_ports:
+    - 25
+    - 445
+    - 1433
+    - 3306
+    - 5432
+    - 6379
+    - 27017
+  data_exfil_tools:
+    - "/usr/bin/curl"
+    - "/usr/bin/wget"
+    - "/usr/bin/nc"
+    - "/usr/bin/ncat"
+    - "/usr/bin/socat"
+    - "/usr/bin/scp"
+    - "/usr/bin/rsync"
+    - "/usr/bin/ftp"
+
+rules:
+  - name: block-smtp-egress
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 25 }
+    action: deny
+    reason: "Direct SMTP egress (use approved mail relay instead)"
+
+  - name: block-database-egress
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [1433, 3306, 5432, 6379, 27017] }
+        - remote_ip: { not_in_cidr: $internal_subnets }
+    action: deny
+    reason: "Database connection to external host"
+
+  - name: block-smb-egress
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [445, 139] }
+        - remote_ip: { not_in_cidr: $internal_subnets }
+    action: deny
+    reason: "SMB/CIFS to external host (lateral movement risk)"
+
+  - name: audit-data-exfil-tools
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $data_exfil_tools }
+    action: audit
+    reason: "Network transfer tool executed"
+
+  - name: block-irc-ports
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [6667, 6668, 6669, 6697, 7000] }
+    action: deny
+    reason: "IRC connection (common C2 channel)"
+
+  - name: block-tor-ports
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [9001, 9030, 9050, 9051, 9150] }
+    action: deny
+    reason: "Tor network connection"
+
+  - name: audit-high-ports
+    event: network
+    conditions:
+      all:
+        - remote_port: { range: [49152, 65535] }
+        - remote_ip: { not_in_cidr: $internal_subnets }
+    action: audit
+    reason: "Connection to external high port (possible C2)"
+
+default_action: allow
