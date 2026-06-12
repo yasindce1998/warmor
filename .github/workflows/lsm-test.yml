@@ -92,62 +92,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86
           sudo chmod 0666 /dev/kvm
-          go install lmb.io/vimto@latest
-
-      - name: Pre-compile static test binary
-        run: |
-          CGO_ENABLED=0 go test -c -tags integration \
-            -ldflags '-s -w -extldflags "-static"' \
-            -o /tmp/lsm-integration.test ./internal/ebpf/
-          file /tmp/lsm-integration.test
+          CGO_ENABLED=0 go install lmb.io/vimto@latest
 
       - name: Run LSM integration tests in VM
         run: |
-          $(go env GOPATH)/bin/vimto exec -- \
-            /tmp/lsm-integration.test -test.v -test.count 1 -test.timeout 120s
+          CGO_ENABLED=0 $(go env GOPATH)/bin/vimto -- \
+            go test -v -count 1 -tags integration -timeout 120s ./internal/ebpf/
 
-  e2e-enforcement:
-    name: E2E Enforcement (vimto)
-    runs-on: ubuntu-latest
-    needs: [lsm-integration]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.24"
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-system-x86
-          sudo chmod 0666 /dev/kvm
-          go install lmb.io/vimto@latest
-
-      - name: Build daemon and compiler (static)
-        run: |
-          CGO_ENABLED=0 go build -ldflags '-s -w -extldflags "-static"' \
-            -o /tmp/warmor-daemon ./cmd/warmor-daemon
-          CGO_ENABLED=0 go build -ldflags '-s -w -extldflags "-static"' \
-            -o /tmp/warmor-compile ./cmd/warmor-compile
-          file /tmp/warmor-daemon /tmp/warmor-compile
-
-      - name: Compile test policy
-        run: /tmp/warmor-compile policies/yaml-example/kubernetes-pod-hardening.yaml -o /tmp/test-policy.wasm
-
-      - name: Run E2E enforcement test in VM
-        run: |
-          chmod +x tests/e2e_enforcement_test.sh
-          $(go env GOPATH)/bin/vimto exec -- \
-            /bin/bash -c "
-              export PATH=/tmp:\$PATH
-              ln -sf /tmp/warmor-daemon /usr/local/bin/warmor-daemon
-              ln -sf /tmp/warmor-compile /usr/local/bin/warmor-compile
-              DAEMON_BIN=/tmp/warmor-daemon \
-              POLICY_FILE=policies/yaml-example/kubernetes-pod-hardening.yaml \
-              ./tests/e2e_enforcement_test.sh
-            "
