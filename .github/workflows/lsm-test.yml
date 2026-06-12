@@ -100,12 +100,12 @@ jobs:
           GOPACKAGE: ebpf
         run: |
           cd internal/ebpf
-          go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event -type policy_key -type policy_value lsm_exec ../../bpf/lsm_exec.bpf.c -- $BPF_CFLAGS
-          go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event lsm_file ../../bpf/lsm_file.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go lsm_exec ../../bpf/lsm_exec.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go lsm_file ../../bpf/lsm_file.bpf.c -- $BPF_CFLAGS
           go run github.com/cilium/ebpf/cmd/bpf2go lsm_connect ../../bpf/lsm_connect.bpf.c -- $BPF_CFLAGS
-          go run github.com/cilium/ebpf/cmd/bpf2go -type execve_event execve_monitor ../../bpf/execve_monitor.bpf.c -- $BPF_CFLAGS
-          go run github.com/cilium/ebpf/cmd/bpf2go -type file_event openat_monitor ../../bpf/openat_monitor.bpf.c -- $BPF_CFLAGS
-          go run github.com/cilium/ebpf/cmd/bpf2go -type network_event connect_monitor ../../bpf/connect_monitor.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go execve_monitor ../../bpf/execve_monitor.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go openat_monitor ../../bpf/openat_monitor.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go connect_monitor ../../bpf/connect_monitor.bpf.c -- $BPF_CFLAGS
           rm -f generated_stubs.go
 
       - name: Run LSM integration tests in VM
