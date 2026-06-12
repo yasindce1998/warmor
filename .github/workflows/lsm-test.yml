@@ -95,6 +95,8 @@ jobs:
           go install lmb.io/vimto@latest
 
       - name: Run LSM integration tests in VM
+        env:
+          CGO_ENABLED: "0"
         run: |
           $(go env GOPATH)/bin/vimto -- \
             go test -v -count 1 -tags integration -timeout 120s ./internal/ebpf/
