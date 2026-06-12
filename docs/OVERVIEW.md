@@ -1,8 +1,8 @@
 # warmor Project Status
 
-**Version:** 1.2.0-beta  
+**Version:** 1.3.0-beta  
 **Last Updated:** 2026-06-12  
-**Status:** Phase 6 In Progress (LSM-BPF Kernel Enforcement)
+**Status:** Phase 6 Complete — Testing & Validation
 
 ---
 
@@ -49,7 +49,7 @@
 - Grafana dashboards (events, latency, cache, errors)
 - Codebase hardening and security audit
 
-### Phase 6: LSM-BPF Kernel Enforcement — IN PROGRESS
+### Phase 6: LSM-BPF Kernel Enforcement — COMPLETE
 - LSM-BPF synchronous hooks (bprm_check_security, file_open, socket_connect)
 - BPF_MAP_TYPE_HASH policy map with FNV-1a hashed keys
 - Cgroup-aware two-tier lookup (per-container + global fallback)

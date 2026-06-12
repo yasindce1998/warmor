@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26.2+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange?style=flat&logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Phase%206%20In%20Progress-blue)](docs/OVERVIEW.md)
+[![Status](https://img.shields.io/badge/Status-Phase%206%20Complete-brightgreen)](docs/OVERVIEW.md)
 [![Linux](https://img.shields.io/badge/Linux-Production-brightgreen)](docs/PLATFORM_LINUX.md)
 [![Windows](https://img.shields.io/badge/Windows-Beta%2FETW%2BeBPF-yellow)](docs/PLATFORM_WINDOWS.md)
 [![macOS](https://img.shields.io/badge/macOS-Beta%2FESF-yellow)](docs/PLATFORM_MACOS.md)
@@ -122,5 +122,5 @@ warmor is licensed under the [MIT License](LICENSE).
 
 ---
 
-**Version:** 1.2.0-beta (Phase 6 In Progress — LSM-BPF Kernel Enforcement)  
+**Version:** 1.3.0-beta (Phase 6 Complete — LSM-BPF Kernel Enforcement)  
 **Contact:** [GitHub Issues](https://github.com/yasindce1998/warmor/issues) | [Discussions](https://github.com/yasindce1998/warmor/discussions)

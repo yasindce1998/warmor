@@ -1,8 +1,8 @@
 # warmor Architecture
 
-**Version:** 1.2.0-beta  
+**Version:** 1.3.0-beta  
 **Last Updated:** 2026-06-12  
-**Status:** Phase 6 In Progress (LSM-BPF Kernel Enforcement)
+**Status:** Phase 6 Complete — Testing & Validation
 
 ---
 
