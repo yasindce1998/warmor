@@ -13,15 +13,15 @@ monitors: execve_monitor.bpf.o openat_monitor.bpf.o connect_monitor.bpf.o
 
 lsm: lsm_exec.bpf.o lsm_file.bpf.o lsm_connect.bpf.o
 
-execve_monitor.bpf.o: execve_monitor.bpf.c
+execve_monitor.bpf.o: execve_monitor.bpf.c tracepoint_defs.h
 	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
 		-c execve_monitor.bpf.c -o execve_monitor.bpf.o
 
-openat_monitor.bpf.o: openat_monitor.bpf.c
+openat_monitor.bpf.o: openat_monitor.bpf.c tracepoint_defs.h
 	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
 		-c openat_monitor.bpf.c -o openat_monitor.bpf.o
 
-connect_monitor.bpf.o: connect_monitor.bpf.c
+connect_monitor.bpf.o: connect_monitor.bpf.c tracepoint_defs.h
 	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
 		-c connect_monitor.bpf.c -o connect_monitor.bpf.o
 
