@@ -1,0 +1,171 @@
+name: LSM-BPF Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bpf/**"
+      - "internal/ebpf/**"
+      - "internal/enforcer/**"
+      - "cmd/warmor-daemon/**"
+      - ".github/workflows/lsm-test.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "bpf/**"
+      - "internal/ebpf/**"
+      - "internal/enforcer/**"
+      - "cmd/warmor-daemon/**"
+      - ".github/workflows/lsm-test.yml"
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: Unit Tests (hash, serialization)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Run hash and serialization tests
+        run: go test -v -race -run "TestHash|TestPolicyKey" ./internal/ebpf/...
+
+  bpf-compile:
+    name: BPF Compilation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install BPF build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libbpf-dev linux-headers-$(uname -r)
+
+      - name: Compile LSM exec program
+        run: |
+          clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
+            -I/usr/include/bpf -I./bpf \
+            -c bpf/lsm_exec.bpf.c -o /tmp/lsm_exec.bpf.o
+
+      - name: Compile LSM file program
+        run: |
+          clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
+            -I/usr/include/bpf -I./bpf \
+            -c bpf/lsm_file.bpf.c -o /tmp/lsm_file.bpf.o
+
+      - name: Compile LSM connect program
+        run: |
+          clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
+            -I/usr/include/bpf -I./bpf \
+            -c bpf/lsm_connect.bpf.c -o /tmp/lsm_connect.bpf.o
+
+      - name: Compile monitor programs
+        run: make -C bpf all
+
+      - name: Verify BPF object files
+        run: |
+          for obj in /tmp/lsm_exec.bpf.o /tmp/lsm_file.bpf.o /tmp/lsm_connect.bpf.o; do
+            echo "=== $(basename $obj) ==="
+            llvm-objdump -h "$obj" | head -20
+            echo ""
+          done
+
+  lsm-integration:
+    name: LSM Integration (vmtest)
+    runs-on: ubuntu-latest
+    needs: [unit-tests, bpf-compile]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libbpf-dev
+
+      - name: Build test binary
+        run: |
+          CGO_ENABLED=0 go test -c -tags integration \
+            -o /tmp/lsm-integration.test ./internal/ebpf/
+
+      - uses: danobi/vmtest-action@v0.13
+        with:
+          kernel: "6.8"
+          command: |
+            # Mount required filesystems
+            mount -t bpf bpf /sys/fs/bpf 2>/dev/null || true
+            mount -t cgroup2 none /sys/fs/cgroup 2>/dev/null || true
+
+            # Verify LSM-BPF support
+            echo "LSM list: $(cat /sys/kernel/security/lsm)"
+            if ! grep -q "bpf" /sys/kernel/security/lsm; then
+              echo "SKIP: kernel does not have BPF LSM enabled"
+              exit 0
+            fi
+
+            # Run integration tests
+            /tmp/lsm-integration.test -test.v -test.timeout 120s
+
+  e2e-enforcement:
+    name: E2E Enforcement (vmtest)
+    runs-on: ubuntu-latest
+    needs: [lsm-integration]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libbpf-dev curl
+
+      - name: Build daemon and compiler
+        run: |
+          CGO_ENABLED=0 go build -o /tmp/warmor-daemon ./cmd/warmor-daemon
+          CGO_ENABLED=0 go build -o /tmp/warmor-compile ./cmd/warmor-compile
+
+      - name: Compile test policy
+        run: /tmp/warmor-compile policies/yaml-example/kubernetes-pod-hardening.yaml -o /tmp/test-policy.wasm
+
+      - name: Prepare test artifacts
+        run: |
+          cp tests/e2e_enforcement_test.sh /tmp/
+          cp policies/yaml-example/kubernetes-pod-hardening.yaml /tmp/
+          chmod +x /tmp/e2e_enforcement_test.sh
+
+      - uses: danobi/vmtest-action@v0.13
+        with:
+          kernel: "6.8"
+          command: |
+            # Mount required filesystems
+            mount -t bpf bpf /sys/fs/bpf 2>/dev/null || true
+            mount -t cgroup2 none /sys/fs/cgroup 2>/dev/null || true
+
+            # Verify LSM-BPF support
+            if ! grep -q "bpf" /sys/kernel/security/lsm; then
+              echo "SKIP: kernel does not have BPF LSM enabled"
+              exit 0
+            fi
+
+            # Set up paths for the test
+            export PATH="/tmp:$PATH"
+            ln -sf /tmp/warmor-daemon /usr/local/bin/warmor-daemon
+            ln -sf /tmp/warmor-compile /usr/local/bin/warmor-compile
+
+            # Override paths in the test
+            DAEMON_BIN=/tmp/warmor-daemon \
+            POLICY_FILE=/tmp/kubernetes-pod-hardening.yaml \
+            /tmp/e2e_enforcement_test.sh
