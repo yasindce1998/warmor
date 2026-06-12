@@ -11,16 +11,18 @@ int BPF_PROG(lsm_file_check, struct file *file)
 	if (should_skip_cgroup(cgid))
 		return 0;
 
-	// Read the file path from dentry
+	// Read the file path from dentry — use nested BPF_CORE_READ to get
+	// the name pointer directly, avoiding struct qstr layout mismatch.
 	struct dentry *dentry = BPF_CORE_READ(file, f_path.dentry);
 	if (!dentry)
 		return 0;
 
-	// Read dentry name (short name only — full path requires walking parents
-	// which is too expensive in BPF; the hash still provides rule matching)
-	struct qstr d_name = BPF_CORE_READ(dentry, d_name);
+	const unsigned char *name = BPF_CORE_READ(dentry, d_name.name);
+	if (!name)
+		return 0;
+
 	char fname_buf[256];
-	int len = bpf_probe_read_kernel_str(fname_buf, sizeof(fname_buf), d_name.name);
+	int len = bpf_probe_read_kernel_str(fname_buf, sizeof(fname_buf), name);
 	if (len <= 0)
 		return 0;
 
