@@ -1,12 +1,78 @@
 # Quick Start
 
-Get warmor running in your Kubernetes cluster in under 5 minutes. This guide deploys in **audit-only mode** so nothing is blocked — safe to try on any cluster.
+Get warmor running in under 5 minutes.
 
-## Prerequisites
+## Install Options
 
+### Option A: Kubernetes (Helm)
+
+Deploy as a DaemonSet in **audit-only mode** — nothing is blocked, safe to try on any cluster.
+
+**Prerequisites:**
 - Kubernetes 1.25+ cluster with Linux nodes (kernel 5.8+)
 - `helm` v3.10+
 - `kubectl` configured for your cluster
+
+### Option B: Standalone Binary
+
+Run directly on a Linux host (bare-metal, VM, or for local testing).
+
+**Prerequisites:**
+- Linux kernel 5.8+ (x86_64 or arm64)
+- Root access (required for eBPF)
+
+```bash
+# Download latest release
+curl -LO https://github.com/yasindce1998/warmor/releases/latest/download/warmor-daemon-linux-amd64
+chmod +x warmor-daemon-linux-amd64
+sudo mv warmor-daemon-linux-amd64 /usr/local/bin/warmor-daemon
+
+# Verify
+warmor-daemon --version
+```
+
+For ARM64 (AWS Graviton, Raspberry Pi):
+```bash
+curl -LO https://github.com/yasindce1998/warmor/releases/latest/download/warmor-daemon-linux-arm64
+chmod +x warmor-daemon-linux-arm64
+sudo mv warmor-daemon-linux-arm64 /usr/local/bin/warmor-daemon
+```
+
+**Verify checksum:**
+```bash
+curl -LO https://github.com/yasindce1998/warmor/releases/latest/download/warmor-daemon-linux-amd64.sha256
+sha256sum -c warmor-daemon-linux-amd64.sha256
+```
+
+**Run with a policy:**
+```bash
+sudo warmor-daemon --policy examples/policies/kubernetes-hardening.yaml
+```
+
+**Run as a systemd service:**
+```bash
+sudo tee /etc/systemd/system/warmor.service <<EOF
+[Unit]
+Description=Warmor eBPF Security Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/warmor-daemon --policy /etc/warmor/policy.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now warmor
+```
+
+---
+
+## Kubernetes Deployment
 
 ## 1. Install (Audit Mode)
 
