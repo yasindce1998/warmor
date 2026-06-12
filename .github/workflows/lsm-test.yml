@@ -97,6 +97,7 @@ jobs:
       - name: Generate BPF bindings (replaces stubs with real loaders)
         env:
           BPF_CFLAGS: "-I../../bpf -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu -D__TARGET_ARCH_x86"
+          GOPACKAGE: ebpf
         run: |
           cd internal/ebpf
           go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event -type policy_key -type policy_value lsm_exec ../../bpf/lsm_exec.bpf.c -- $BPF_CFLAGS
