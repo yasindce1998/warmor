@@ -5,6 +5,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
+#include "vmlinux_minimal.h"
 
 #define EVENT_TYPE_EXEC    0
 #define EVENT_TYPE_FILE    1
