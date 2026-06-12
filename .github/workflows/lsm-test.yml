@@ -103,7 +103,7 @@ jobs:
 
       - name: Run LSM integration tests in VM
         run: |
-          $(go env GOPATH)/bin/vimto -- \
+          $(go env GOPATH)/bin/vimto exec -- \
             /tmp/lsm-integration.test -test.v -test.count 1 -test.timeout 120s
 
   e2e-enforcement:
@@ -142,7 +142,7 @@ jobs:
       - name: Run E2E enforcement test in VM
         run: |
           chmod +x tests/e2e_enforcement_test.sh
-          $(go env GOPATH)/bin/vimto -- \
+          $(go env GOPATH)/bin/vimto exec -- \
             /bin/bash -c "
               export PATH=/tmp:\$PATH
               ln -sf /tmp/warmor-daemon /usr/local/bin/warmor-daemon
