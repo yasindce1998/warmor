@@ -97,7 +97,7 @@ jobs:
           CGO_ENABLED=0 go test -c -tags integration \
             -o /tmp/lsm-integration.test ./internal/ebpf/
 
-      - uses: danobi/vmtest-action@v0.13
+      - uses: danobi/vmtest-action@v0.9
         with:
           kernel: "6.8"
           command: |
@@ -149,7 +149,7 @@ jobs:
           cp policies/yaml-example/kubernetes-pod-hardening.yaml /tmp/
           chmod +x /tmp/e2e_enforcement_test.sh
 
-      - uses: danobi/vmtest-action@v0.13
+      - uses: danobi/vmtest-action@v0.9
         with:
           kernel: "6.8"
           command: |
