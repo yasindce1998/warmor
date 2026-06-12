@@ -94,12 +94,17 @@ jobs:
           sudo chmod 0666 /dev/kvm
           go install lmb.io/vimto@latest
 
+      - name: Pre-compile static test binary
+        run: |
+          CGO_ENABLED=0 go test -c -tags integration \
+            -ldflags '-s -w -extldflags "-static"' \
+            -o /tmp/lsm-integration.test ./internal/ebpf/
+          file /tmp/lsm-integration.test
+
       - name: Run LSM integration tests in VM
-        env:
-          CGO_ENABLED: "0"
         run: |
           $(go env GOPATH)/bin/vimto -- \
-            go test -v -count 1 -tags integration -timeout 120s ./internal/ebpf/
+            /tmp/lsm-integration.test -test.v -test.count 1 -test.timeout 120s
 
   e2e-enforcement:
     name: E2E Enforcement (vimto)
@@ -123,10 +128,13 @@ jobs:
           sudo chmod 0666 /dev/kvm
           go install lmb.io/vimto@latest
 
-      - name: Build daemon and compiler
+      - name: Build daemon and compiler (static)
         run: |
-          CGO_ENABLED=0 go build -o /tmp/warmor-daemon ./cmd/warmor-daemon
-          CGO_ENABLED=0 go build -o /tmp/warmor-compile ./cmd/warmor-compile
+          CGO_ENABLED=0 go build -ldflags '-s -w -extldflags "-static"' \
+            -o /tmp/warmor-daemon ./cmd/warmor-daemon
+          CGO_ENABLED=0 go build -ldflags '-s -w -extldflags "-static"' \
+            -o /tmp/warmor-compile ./cmd/warmor-compile
+          file /tmp/warmor-daemon /tmp/warmor-compile
 
       - name: Compile test policy
         run: /tmp/warmor-compile policies/yaml-example/kubernetes-pod-hardening.yaml -o /tmp/test-policy.wasm
