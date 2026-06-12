@@ -79,6 +79,9 @@ type Event struct {
 	Process  *ProcessEvent `json:"process,omitempty"`
 	File     *FileEvent    `json:"file,omitempty"`
 	Network  *NetworkEvent `json:"network,omitempty"`
+
+	// LSM fields
+	LSMEvent bool `json:"lsm_event,omitempty"`
 }
 
 // GetType returns the event type

@@ -157,6 +157,11 @@ func (p *WindowsPlatform) initializeEBPF(ctx context.Context) error {
 	return fmt.Errorf("eBPF-for-Windows initialization not yet implemented")
 }
 
+// PolicyMap returns nil — Windows does not support LSM-BPF.
+func (p *WindowsPlatform) PolicyMap() any {
+	return nil
+}
+
 // GetMode returns the current monitoring mode
 func (p *WindowsPlatform) GetMode() string {
 	return p.mode

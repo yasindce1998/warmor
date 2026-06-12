@@ -22,6 +22,7 @@ var (
 	metricsPort   = flag.Int("metrics-port", 9090, "Prometheus metrics port")
 	auditMode     = flag.Bool("audit", false, "Audit mode: log deny decisions without enforcing")
 	cgroupFilter  = flag.String("cgroup-filter", "", "Cgroup paths to filter (comma-separated, or 'auto' for K8s pod discovery)")
+	lsmEnforce    = flag.Bool("lsm-enforce", false, "Enable LSM-BPF kernel-level blocking (requires CONFIG_BPF_LSM)")
 	showVersion   = flag.Bool("version", false, "Show version and exit")
 )
 
@@ -71,6 +72,7 @@ func main() {
 		CgroupFilter: cgroupPaths,
 		MetricsPort:  *metricsPort,
 		LogLevel:     *logLevel,
+		LSMEnforce:   *lsmEnforce,
 	})
 	if err != nil {
 		log.Fatalf("❌ Failed to create enforcer: %v", err)

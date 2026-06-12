@@ -105,3 +105,8 @@ func (p *DarwinPlatform) Capabilities() Capabilities {
 		Enforcement:       true, // ESF AUTH events can block
 	}
 }
+
+// PolicyMap returns nil — macOS does not support LSM-BPF.
+func (p *DarwinPlatform) PolicyMap() any {
+	return nil
+}

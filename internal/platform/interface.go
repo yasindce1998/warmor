@@ -25,6 +25,9 @@ type Platform interface {
 
 	// Capabilities returns what this platform supports
 	Capabilities() Capabilities
+
+	// PolicyMap returns the LSM policy map manager, or nil if unavailable.
+	PolicyMap() any
 }
 
 // Capabilities describes platform features
@@ -33,11 +36,13 @@ type Capabilities struct {
 	FileMonitoring    bool // Can monitor file operations
 	NetworkMonitoring bool // Can monitor network operations
 	Enforcement       bool // Can actually block, not just log
+	LSMEnforcement    bool // Kernel-level blocking via LSM-BPF
 }
 
 // Config holds platform-agnostic configuration passed to New().
 type Config struct {
 	CgroupFilter []string
+	LSMEnforce   bool
 }
 
 // Current returns the platform for the current OS with default config.

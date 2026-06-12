@@ -22,6 +22,12 @@ type Options struct {
 	CgroupFilter []string
 	MetricsPort  int
 	LogLevel     string
+	LSMEnforce   bool
+}
+
+// PolicyMapSyncer compiles WASM policy decisions into a kernel BPF map for fast-path enforcement.
+type PolicyMapSyncer interface {
+	SetRule(cgroupID uint64, eventType uint8, pattern string, action uint8, audit bool) error
 }
 
 // Enforcer integrates platform-specific event capture (eBPF/ETW/ESF) with
@@ -36,6 +42,7 @@ type Enforcer struct {
 	actionHandler *ActionHandler
 	logger        *logging.Logger
 	metricsServer *metrics.Server
+	policyMap     PolicyMapSyncer
 	policyPath    string
 	auditMode     bool
 	ctx           context.Context
@@ -64,6 +71,7 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 	// Windows, ESF on macOS).
 	plat, err := platform.New(platform.Config{
 		CgroupFilter: opts.CgroupFilter,
+		LSMEnforce:   opts.LSMEnforce,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize platform: %w", err)
@@ -73,6 +81,15 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		return nil, fmt.Errorf("load platform: %w", err)
 	}
 	logger.LogInfo(fmt.Sprintf("✓ %s platform loaded", plat.Name()))
+
+	caps := plat.Capabilities()
+	var policyMapSyncer PolicyMapSyncer
+	if caps.LSMEnforcement {
+		logger.LogInfo("✓ LSM-BPF kernel enforcement active")
+		if pm, ok := plat.PolicyMap().(PolicyMapSyncer); ok {
+			policyMapSyncer = pm
+		}
+	}
 
 	// Create WASM runtime
 	logger.LogInfo("Creating WASM runtime...")
@@ -136,6 +153,7 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		actionHandler: actionHandler,
 		logger:        logger,
 		metricsServer: metricsServer,
+		policyMap:     policyMapSyncer,
 		policyPath:    policyPath,
 		auditMode:     opts.AuditMode,
 		ctx:           ctx,
@@ -218,6 +236,11 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 	// Cache the decision
 	e.cache.Put(event, result)
 
+	// Compile decision into BPF policy map for kernel fast-path
+	if e.policyMap != nil && !event.LSMEvent {
+		e.syncToPolicyMap(event, result)
+	}
+
 	// Enforce the decision
 	_ = e.actionHandler.Enforce(e.ctx, event, result)
 
@@ -237,6 +260,42 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 	// Update cache size metric
 	cacheStats := e.cache.Stats()
 	metrics.UpdateCacheSize(cacheStats.Size)
+}
+
+func (e *Enforcer) syncToPolicyMap(event *api.Event, result *api.ActionResult) {
+	var eventType uint8
+	var pattern string
+
+	switch event.GetType() {
+	case api.EventTypeProcess:
+		eventType = 0
+		pattern = event.Filename
+		if event.Process != nil {
+			pattern = event.Process.Filename
+		}
+	case api.EventTypeFile:
+		eventType = 1
+		pattern = event.Filename
+		if event.File != nil {
+			pattern = event.File.Path
+		}
+	case api.EventTypeNetwork:
+		eventType = 2
+		if event.Network != nil {
+			pattern = event.Network.RemoteAddr
+		}
+	}
+
+	if pattern == "" {
+		return
+	}
+
+	action := uint8(0)
+	if result.Action == api.ActionDeny {
+		action = 1
+	}
+
+	_ = e.policyMap.SetRule(event.CgroupID, eventType, pattern, action, result.Audit)
 }
 
 // GetStats returns current statistics

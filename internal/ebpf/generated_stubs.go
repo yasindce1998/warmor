@@ -76,3 +76,75 @@ func (o *connect_monitorObjects) Close() error { return nil }
 func loadConnect_monitorObjects(obj *connect_monitorObjects, opts *ebpf.CollectionOptions) error {
 	return nil
 }
+
+// --- lsm_exec ---
+
+type lsm_execObjects struct {
+	lsm_execPrograms
+	lsm_execMaps
+}
+
+type lsm_execPrograms struct {
+	LsmExecCheck *ebpf.Program `ebpf:"lsm_exec_check"`
+}
+
+type lsm_execMaps struct {
+	PolicyMap      *ebpf.Map `ebpf:"policy_map"`
+	LsmEvents      *ebpf.Map `ebpf:"lsm_events"`
+	LsmCgroupFilter *ebpf.Map `ebpf:"lsm_cgroup_filter"`
+	LsmEnforce     *ebpf.Map `ebpf:"lsm_enforce"`
+}
+
+func (o *lsm_execObjects) Close() error { return nil }
+
+func loadLsm_execObjects(_ *lsm_execObjects, _ *ebpf.CollectionOptions) error {
+	return nil
+}
+
+// --- lsm_file ---
+
+type lsm_fileObjects struct {
+	lsm_filePrograms
+	lsm_fileMaps
+}
+
+type lsm_filePrograms struct {
+	LsmFileCheck *ebpf.Program `ebpf:"lsm_file_check"`
+}
+
+type lsm_fileMaps struct {
+	PolicyMap      *ebpf.Map `ebpf:"policy_map"`
+	LsmEvents      *ebpf.Map `ebpf:"lsm_events"`
+	LsmCgroupFilter *ebpf.Map `ebpf:"lsm_cgroup_filter"`
+	LsmEnforce     *ebpf.Map `ebpf:"lsm_enforce"`
+}
+
+func (o *lsm_fileObjects) Close() error { return nil }
+
+func loadLsm_fileObjects(_ *lsm_fileObjects, _ *ebpf.CollectionOptions) error {
+	return nil
+}
+
+// --- lsm_connect ---
+
+type lsm_connectObjects struct {
+	lsm_connectPrograms
+	lsm_connectMaps
+}
+
+type lsm_connectPrograms struct {
+	LsmConnectCheck *ebpf.Program `ebpf:"lsm_connect_check"`
+}
+
+type lsm_connectMaps struct {
+	PolicyMap      *ebpf.Map `ebpf:"policy_map"`
+	LsmEvents      *ebpf.Map `ebpf:"lsm_events"`
+	LsmCgroupFilter *ebpf.Map `ebpf:"lsm_cgroup_filter"`
+	LsmEnforce     *ebpf.Map `ebpf:"lsm_enforce"`
+}
+
+func (o *lsm_connectObjects) Close() error { return nil }
+
+func loadLsm_connectObjects(_ *lsm_connectObjects, _ *ebpf.CollectionOptions) error {
+	return nil
+}

@@ -48,19 +48,15 @@ func (h *ActionHandler) Enforce(ctx context.Context, event *api.Event, result *a
 	}
 }
 
-func (h *ActionHandler) handleAllow(event *api.Event, result *api.ActionResult) error {
-	// For Phase 2, we're monitoring only (no actual blocking)
-	// Phase 3 will add kernel-level enforcement
+func (h *ActionHandler) handleAllow(_ *api.Event, _ *api.ActionResult) error {
 	return nil
 }
 
-func (h *ActionHandler) handleDeny(event *api.Event, result *api.ActionResult) error {
-	// In Phase 2, we simulate enforcement
-	// Phase 3 will add actual process termination via eBPF
+func (h *ActionHandler) handleDeny(_ *api.Event, _ *api.ActionResult) error {
 	return nil
 }
 
-func (h *ActionHandler) handleLog(event *api.Event, result *api.ActionResult) error {
+func (h *ActionHandler) handleLog(_ *api.Event, _ *api.ActionResult) error {
 	return nil
 }
 
