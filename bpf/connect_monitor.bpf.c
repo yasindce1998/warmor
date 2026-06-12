@@ -3,8 +3,37 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include "tracepoint_defs.h"
-#include <linux/in.h>
-#include <linux/in6.h>
+
+#define AF_INET  2
+#define AF_INET6 10
+
+struct sockaddr {
+	unsigned short sa_family;
+	char sa_data[14];
+};
+
+struct in_addr {
+	__u32 s_addr;
+};
+
+struct sockaddr_in {
+	unsigned short sin_family;
+	__u16 sin_port;
+	struct in_addr sin_addr;
+	char sin_zero[8];
+};
+
+struct in6_addr {
+	__u8 s6_addr[16];
+};
+
+struct sockaddr_in6 {
+	unsigned short sin6_family;
+	__u16 sin6_port;
+	__u32 sin6_flowinfo;
+	struct in6_addr sin6_addr;
+	__u32 sin6_scope_id;
+};
 
 // Event structure matching Go NetworkEvent
 struct network_event {
