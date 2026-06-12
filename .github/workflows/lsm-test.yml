@@ -42,24 +42,27 @@ jobs:
       - name: Install BPF build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm libbpf-dev linux-headers-$(uname -r)
+          sudo apt-get install -y clang llvm libbpf-dev linux-headers-$(uname -r) gcc-multilib
 
       - name: Compile LSM exec program
         run: |
           clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
             -I/usr/include/bpf -I./bpf \
+            -I/usr/include/x86_64-linux-gnu \
             -c bpf/lsm_exec.bpf.c -o /tmp/lsm_exec.bpf.o
 
       - name: Compile LSM file program
         run: |
           clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
             -I/usr/include/bpf -I./bpf \
+            -I/usr/include/x86_64-linux-gnu \
             -c bpf/lsm_file.bpf.c -o /tmp/lsm_file.bpf.o
 
       - name: Compile LSM connect program
         run: |
           clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
             -I/usr/include/bpf -I./bpf \
+            -I/usr/include/x86_64-linux-gnu \
             -c bpf/lsm_connect.bpf.c -o /tmp/lsm_connect.bpf.o
 
       - name: Compile monitor programs
