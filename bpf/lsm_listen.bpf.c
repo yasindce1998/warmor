@@ -18,7 +18,7 @@ int BPF_PROG(lsm_listen_check, struct socket *sock, int backlog)
 	if (should_skip_cgroup(cgid))
 		return 0;
 
-	__u16 port = BPF_CORE_READ(sock, sk, sk_num);
+	__u16 port = BPF_CORE_READ(sock, sk, __sk_common.skc_num);
 	if (port == 0)
 		return 0;
 

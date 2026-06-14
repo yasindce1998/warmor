@@ -10,9 +10,12 @@ int BPF_PROG(lsm_ptrace_check, struct task_struct *child, unsigned int mode)
 	if (should_skip_cgroup(cgid))
 		return 0;
 
+	// comm is a char[16] field, not a pointer: BPF_CORE_READ would copy the
+	// array into a temp and hand back a pointer to that stack copy. Use the
+	// purpose-built string reader, which relocates the field offset and reads
+	// the NUL-terminated string directly into comm_buf.
 	char comm_buf[16];
-	bpf_probe_read_kernel_str(comm_buf, sizeof(comm_buf),
-		BPF_CORE_READ(child, comm));
+	BPF_CORE_READ_STR_INTO(&comm_buf, child, comm);
 
 	__u32 hash = fnv1a_hash(comm_buf, 16);
 

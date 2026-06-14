@@ -31,8 +31,19 @@ struct file {
 	struct path f_path;
 } __attribute__((preserve_access_index));
 
+/*
+ * In the kernel, `sk_num` is a macro for `__sk_common.skc_num`, not a real
+ * field of `struct sock` — so CO-RE cannot relocate a field literally named
+ * `sk_num` and poisons the access ("bad CO-RE relocation"). Model the real
+ * layout: skc_num lives in the embedded struct sock_common, and listeners read
+ * BPF_CORE_READ(sock, sk, __sk_common.skc_num).
+ */
+struct sock_common {
+	unsigned short skc_num;
+} __attribute__((preserve_access_index));
+
 struct sock {
-	unsigned short sk_num;
+	struct sock_common __sk_common;
 } __attribute__((preserve_access_index));
 
 struct socket {
