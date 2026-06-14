@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -386,11 +387,18 @@ func (l *LSMLoader) Close() error {
 		}
 	}
 
+	// NOTE: these are concrete pointer types stored into an interface. A nil
+	// *lsm_xxxObjects (a load step that never ran, or one that failed) becomes
+	// a non-nil interface holding a nil pointer, so a plain `obj != nil` check
+	// passes and Close() runs on a nil receiver — which segfaults in the
+	// bpf2go-generated Close(). This happens on every partial load (e.g. a
+	// program that fails to verify on some kernel), so guard the pointer value.
 	for _, obj := range []interface{ Close() error }{l.execObjs, l.fileObjs, l.connectObjs, l.bindObjs, l.listenObjs, l.ptraceObjs, l.mountObjs} {
-		if obj != nil {
-			if err := obj.Close(); err != nil {
-				errs = append(errs, err)
-			}
+		if obj == nil || reflect.ValueOf(obj).IsNil() {
+			continue
+		}
+		if err := obj.Close(); err != nil {
+			errs = append(errs, err)
 		}
 	}
 
