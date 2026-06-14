@@ -121,6 +121,14 @@ func IsLSMSupported() bool {
 	return false
 }
 
+// kernelBTFAvailable reports whether the running kernel exposes its own BTF,
+// which cilium/ebpf needs to relocate the CO-RE field accesses in our minimal
+// vmlinux structs to the correct offsets for this kernel.
+func kernelBTFAvailable() bool {
+	_, err := os.Stat("/sys/kernel/btf/vmlinux")
+	return err == nil
+}
+
 // LoadLSM loads and attaches all LSM-BPF programs.
 // Returns nil without error if LSM-BPF is not supported.
 func LoadLSM() (*LSMLoader, error) {
@@ -131,6 +139,14 @@ func LoadLSM() (*LSMLoader, error) {
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return nil, fmt.Errorf("remove memlock for lsm: %w", err)
+	}
+
+	// CO-RE relocations require kernel BTF. Without it, loading the programs
+	// fails deep inside the verifier with an opaque message; check up front so
+	// the operator gets an actionable error (and --require-lsm fails cleanly).
+	if !kernelBTFAvailable() {
+		return nil, fmt.Errorf("kernel BTF not found at /sys/kernel/btf/vmlinux: " +
+			"CO-RE requires a kernel built with CONFIG_DEBUG_INFO_BTF=y")
 	}
 
 	l := &LSMLoader{}

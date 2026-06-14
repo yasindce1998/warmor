@@ -23,6 +23,10 @@ type Options struct {
 	MetricsPort  int
 	LogLevel     string
 	LSMEnforce   bool
+	// RequireLSM refuses to start unless BPF-LSM kernel enforcement can be
+	// established (fail-closed startup). Without it, an unsupported kernel
+	// degrades to tracepoint-only observation.
+	RequireLSM bool
 }
 
 // PolicyMapSyncer compiles WASM policy decisions into a kernel BPF map for fast-path enforcement.
@@ -72,6 +76,7 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 	plat, err := platform.New(platform.Config{
 		CgroupFilter: opts.CgroupFilter,
 		LSMEnforce:   opts.LSMEnforce,
+		RequireLSM:   opts.RequireLSM,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize platform: %w", err)

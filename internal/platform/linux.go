@@ -12,9 +12,13 @@ import (
 )
 
 // LinuxConfig holds configuration for the Linux platform.
+//
+// Fields must stay aligned with platform.Config (see new_linux.go, which
+// converts one to the other with LinuxConfig(cfg)).
 type LinuxConfig struct {
 	CgroupFilter []string
 	LSMEnforce   bool
+	RequireLSM   bool
 }
 
 type LinuxPlatform struct {
@@ -66,16 +70,40 @@ func (p *LinuxPlatform) Load(ctx context.Context) error {
 		}
 	}
 
-	// Attempt to load LSM-BPF programs (graceful fallback if unsupported)
+	// Attempt to load LSM-BPF programs. By default this is a graceful
+	// fallback: if the kernel can't load them we keep running in
+	// tracepoint-only (observe) mode. With RequireLSM set, the operator has
+	// demanded kernel enforcement, so any failure to establish it is fatal
+	// (fail-closed startup) rather than a silent downgrade.
 	lsmLoader, err := ebpf.LoadLSM()
 	if err != nil {
+		if p.config.RequireLSM {
+			loader.Close()
+			return fmt.Errorf("LSM-BPF required (--require-lsm) but failed to load: %w", err)
+		}
 		fmt.Printf("WARNING: LSM-BPF load failed: %v (continuing with tracepoints only)\n", err)
+	}
+	if lsmLoader == nil {
+		// Kernel does not support BPF LSM (LoadLSM returns nil,nil).
+		if p.config.RequireLSM {
+			loader.Close()
+			return fmt.Errorf("LSM-BPF required (--require-lsm) but the kernel does not support BPF LSM " +
+				"(need CONFIG_BPF_LSM=y and \"bpf\" in /sys/kernel/security/lsm); refusing to start")
+		}
+		if p.config.LSMEnforce {
+			fmt.Println("WARNING: --lsm-enforce was requested but BPF LSM is unavailable on this kernel; " +
+				"kernel-level blocking is INACTIVE (running in observe mode). Pass --require-lsm to fail closed instead.")
+		}
 	}
 	if lsmLoader != nil {
 		p.lsmLoader = lsmLoader
 		p.lsmEnabled = true
 
 		if err := lsmLoader.SetEnforceMode(p.config.LSMEnforce); err != nil {
+			if p.config.RequireLSM {
+				loader.Close()
+				return fmt.Errorf("LSM-BPF required (--require-lsm) but failed to set enforce mode: %w", err)
+			}
 			fmt.Printf("WARNING: failed to set LSM enforce mode: %v\n", err)
 		}
 
@@ -86,7 +114,22 @@ func (p *LinuxPlatform) Load(ctx context.Context) error {
 		}
 	}
 
+	p.logSecurityPosture()
 	return nil
+}
+
+// logSecurityPosture prints a one-line summary of the active enforcement
+// posture so operators can see at a glance whether the kernel fast-path is
+// blocking, merely auditing, or absent.
+func (p *LinuxPlatform) logSecurityPosture() {
+	switch {
+	case p.lsmEnabled && p.config.LSMEnforce:
+		fmt.Println("Security posture: LSM-BPF kernel enforcement ACTIVE (deny rules blocked in-kernel)")
+	case p.lsmEnabled:
+		fmt.Println("Security posture: LSM-BPF loaded in AUDIT-ONLY mode (deny rules logged, not blocked); pass --lsm-enforce to block")
+	default:
+		fmt.Println("Security posture: OBSERVE-ONLY via tracepoints (no kernel-level enforcement)")
+	}
 }
 
 func (p *LinuxPlatform) Start(ctx context.Context, eventChan chan<- *api.Event) error {

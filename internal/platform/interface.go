@@ -40,9 +40,18 @@ type Capabilities struct {
 }
 
 // Config holds platform-agnostic configuration passed to New().
+//
+// NOTE: LinuxConfig is derived from Config via a direct struct conversion
+// (LinuxConfig(cfg) in new_linux.go), so the two must keep identical fields
+// in the same order.
 type Config struct {
 	CgroupFilter []string
 	LSMEnforce   bool
+	// RequireLSM makes BPF-LSM kernel enforcement mandatory: if the LSM
+	// programs cannot be loaded (unsupported kernel, missing BTF, verifier
+	// rejection), Load fails instead of silently falling back to
+	// tracepoint-only observation. This selects fail-closed startup.
+	RequireLSM bool
 }
 
 // Current returns the platform for the current OS with default config.

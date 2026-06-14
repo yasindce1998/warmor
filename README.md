@@ -91,6 +91,8 @@ sudo ./warmor-daemon -policy policy.yaml --lsm-enforce
 | **[Getting Started](GETTING_STARTED.md)** | Build, run, write policies, troubleshoot |
 | **[Build Guide](BUILD.md)** | Platform-specific build instructions |
 | **[Architecture](docs/architecture.md)** | System design, components, data flow |
+| **[Security Posture](docs/SECURITY_POSTURE.md)** | Fail-open vs fail-closed, enforcement modes, `--require-lsm` |
+| **[BPF Compatibility](docs/BPF_COMPATIBILITY.md)** | CO-RE, kernel requirements, tested kernel matrix |
 | **[Project Status](docs/OVERVIEW.md)** | Current status and roadmap |
 | **[PRD](docs/PRD.md)** | Product requirements and phase tracking |
 

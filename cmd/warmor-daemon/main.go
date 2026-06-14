@@ -23,6 +23,7 @@ var (
 	auditMode     = flag.Bool("audit", false, "Audit mode: log deny decisions without enforcing")
 	cgroupFilter  = flag.String("cgroup-filter", "", "Cgroup paths to filter (comma-separated, or 'auto' for K8s pod discovery)")
 	lsmEnforce    = flag.Bool("lsm-enforce", false, "Enable LSM-BPF kernel-level blocking (requires CONFIG_BPF_LSM)")
+	requireLSM    = flag.Bool("require-lsm", false, "Fail to start unless BPF-LSM kernel enforcement can be loaded (fail-closed; default is to degrade to observe-only)")
 	showVersion   = flag.Bool("version", false, "Show version and exit")
 )
 
@@ -49,6 +50,8 @@ func main() {
 	log.Printf("Log Level: %s", *logLevel)
 	log.Printf("Metrics Port: %d", *metricsPort)
 	log.Printf("Audit Mode: %v", *auditMode)
+	log.Printf("LSM Enforce: %v", *lsmEnforce)
+	log.Printf("Require LSM: %v", *requireLSM)
 	if *cgroupFilter != "" {
 		log.Printf("Cgroup Filter: %s", *cgroupFilter)
 	}
@@ -73,6 +76,7 @@ func main() {
 		MetricsPort:  *metricsPort,
 		LogLevel:     *logLevel,
 		LSMEnforce:   *lsmEnforce,
+		RequireLSM:   *requireLSM,
 	})
 	if err != nil {
 		log.Fatalf("❌ Failed to create enforcer: %v", err)

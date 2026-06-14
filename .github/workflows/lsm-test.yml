@@ -105,9 +105,30 @@ jobs:
           done
 
   lsm-integration:
-    name: LSM Integration (vimto)
+    name: LSM Integration (${{ matrix.kernel }})
     runs-on: ubuntu-latest
     needs: [unit-tests, bpf-compile]
+    # Validate CO-RE relocations and LSM attach across kernels with different
+    # struct layouts. ci-kernels only builds the -selftests variant (the one
+    # with CONFIG_BPF_LSM=y + BTF) for its release *channels*, not its numeric
+    # version tags, so those three channels are the only BPF-LSM-capable images
+    # available upstream:
+    #   longterm  = oldest of the three  (currently ~6.18)
+    #   stable    = current stable        (the primary gate, ~6.19)
+    #   mainline  = newest / -rc          (early warning, allowed to fail, ~7.0)
+    # The version spread is therefore narrow today; see docs/BPF_COMPATIBILITY.md
+    # for the path to testing older LTS kernels (5.15/6.1) with custom images.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kernel: longterm-selftests
+            experimental: false
+          - kernel: stable-selftests
+            experimental: false
+          - kernel: mainline-selftests
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
     steps:
       - uses: actions/checkout@v4
 
@@ -142,6 +163,7 @@ jobs:
 
       - name: Run LSM integration tests in VM
         run: |
-          CGO_ENABLED=0 $(go env GOPATH)/bin/vimto -- \
+          CGO_ENABLED=0 $(go env GOPATH)/bin/vimto \
+            -kernel ghcr.io/cilium/ci-kernels:${{ matrix.kernel }} -- \
             go test -v -count 1 -tags integration -timeout 120s ./internal/ebpf/
 
