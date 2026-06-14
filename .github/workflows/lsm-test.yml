@@ -65,12 +65,40 @@ jobs:
             -I/usr/include/x86_64-linux-gnu \
             -c bpf/lsm_connect.bpf.c -o /tmp/lsm_connect.bpf.o
 
+      - name: Compile LSM bind program
+        run: |
+          clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
+            -I/usr/include/bpf -I./bpf \
+            -I/usr/include/x86_64-linux-gnu \
+            -c bpf/lsm_bind.bpf.c -o /tmp/lsm_bind.bpf.o
+
+      - name: Compile LSM listen program
+        run: |
+          clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
+            -I/usr/include/bpf -I./bpf \
+            -I/usr/include/x86_64-linux-gnu \
+            -c bpf/lsm_listen.bpf.c -o /tmp/lsm_listen.bpf.o
+
+      - name: Compile LSM ptrace program
+        run: |
+          clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
+            -I/usr/include/bpf -I./bpf \
+            -I/usr/include/x86_64-linux-gnu \
+            -c bpf/lsm_ptrace.bpf.c -o /tmp/lsm_ptrace.bpf.o
+
+      - name: Compile LSM mount program
+        run: |
+          clang -g -O2 -target bpf -D__TARGET_ARCH_x86 \
+            -I/usr/include/bpf -I./bpf \
+            -I/usr/include/x86_64-linux-gnu \
+            -c bpf/lsm_mount.bpf.c -o /tmp/lsm_mount.bpf.o
+
       - name: Compile monitor programs
         run: make -C bpf all
 
       - name: Verify BPF object files
         run: |
-          for obj in /tmp/lsm_exec.bpf.o /tmp/lsm_file.bpf.o /tmp/lsm_connect.bpf.o; do
+          for obj in /tmp/lsm_exec.bpf.o /tmp/lsm_file.bpf.o /tmp/lsm_connect.bpf.o /tmp/lsm_bind.bpf.o /tmp/lsm_listen.bpf.o /tmp/lsm_ptrace.bpf.o /tmp/lsm_mount.bpf.o; do
             echo "=== $(basename $obj) ==="
             llvm-objdump -h "$obj" | head -20
             echo ""
@@ -103,6 +131,10 @@ jobs:
           go run github.com/cilium/ebpf/cmd/bpf2go lsm_exec ../../bpf/lsm_exec.bpf.c -- $BPF_CFLAGS
           go run github.com/cilium/ebpf/cmd/bpf2go lsm_file ../../bpf/lsm_file.bpf.c -- $BPF_CFLAGS
           go run github.com/cilium/ebpf/cmd/bpf2go lsm_connect ../../bpf/lsm_connect.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go lsm_bind ../../bpf/lsm_bind.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go lsm_listen ../../bpf/lsm_listen.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go lsm_ptrace ../../bpf/lsm_ptrace.bpf.c -- $BPF_CFLAGS
+          go run github.com/cilium/ebpf/cmd/bpf2go lsm_mount ../../bpf/lsm_mount.bpf.c -- $BPF_CFLAGS
           go run github.com/cilium/ebpf/cmd/bpf2go execve_monitor ../../bpf/execve_monitor.bpf.c -- $BPF_CFLAGS
           go run github.com/cilium/ebpf/cmd/bpf2go openat_monitor ../../bpf/openat_monitor.bpf.c -- $BPF_CFLAGS
           go run github.com/cilium/ebpf/cmd/bpf2go connect_monitor ../../bpf/connect_monitor.bpf.c -- $BPF_CFLAGS

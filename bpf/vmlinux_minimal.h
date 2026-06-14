@@ -31,12 +31,21 @@ struct file {
 	struct path f_path;
 } __attribute__((preserve_access_index));
 
+struct sock {
+	unsigned short sk_num;
+} __attribute__((preserve_access_index));
+
 struct socket {
 	short type;
+	struct sock *sk;
 } __attribute__((preserve_access_index));
 
 struct sockaddr {
 	unsigned short sa_family;
+} __attribute__((preserve_access_index));
+
+struct task_struct {
+	char comm[16];
 } __attribute__((preserve_access_index));
 
 #endif /* __VMLINUX_MINIMAL_H */

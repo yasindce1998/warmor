@@ -11,7 +11,7 @@ all: monitors lsm
 
 monitors: execve_monitor.bpf.o openat_monitor.bpf.o connect_monitor.bpf.o
 
-lsm: lsm_exec.bpf.o lsm_file.bpf.o lsm_connect.bpf.o
+lsm: lsm_exec.bpf.o lsm_file.bpf.o lsm_connect.bpf.o lsm_bind.bpf.o lsm_listen.bpf.o lsm_ptrace.bpf.o lsm_mount.bpf.o
 
 execve_monitor.bpf.o: execve_monitor.bpf.c tracepoint_defs.h
 	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
@@ -36,6 +36,22 @@ lsm_file.bpf.o: lsm_file.bpf.c warmor_lsm.h
 lsm_connect.bpf.o: lsm_connect.bpf.c warmor_lsm.h
 	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
 		-c lsm_connect.bpf.c -o lsm_connect.bpf.o
+
+lsm_bind.bpf.o: lsm_bind.bpf.c warmor_lsm.h
+	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
+		-c lsm_bind.bpf.c -o lsm_bind.bpf.o
+
+lsm_listen.bpf.o: lsm_listen.bpf.c warmor_lsm.h
+	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
+		-c lsm_listen.bpf.c -o lsm_listen.bpf.o
+
+lsm_ptrace.bpf.o: lsm_ptrace.bpf.c warmor_lsm.h
+	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
+		-c lsm_ptrace.bpf.c -o lsm_ptrace.bpf.o
+
+lsm_mount.bpf.o: lsm_mount.bpf.c warmor_lsm.h
+	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) \
+		-c lsm_mount.bpf.c -o lsm_mount.bpf.o
 
 clean:
 	rm -f *.o

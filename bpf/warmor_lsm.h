@@ -10,6 +10,10 @@
 #define EVENT_TYPE_EXEC    0
 #define EVENT_TYPE_FILE    1
 #define EVENT_TYPE_NETWORK 2
+#define EVENT_TYPE_BIND    3
+#define EVENT_TYPE_LISTEN  4
+#define EVENT_TYPE_PTRACE  5
+#define EVENT_TYPE_MOUNT   6
 
 #define ACTION_ALLOW 0
 #define ACTION_DENY  1

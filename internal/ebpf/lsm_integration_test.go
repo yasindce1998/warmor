@@ -58,6 +58,18 @@ func TestLSM_LoadAndAttach(t *testing.T) {
 	if loader.connectLink == nil {
 		t.Error("connect LSM link is nil")
 	}
+	if loader.bindLink == nil {
+		t.Error("bind LSM link is nil")
+	}
+	if loader.listenLink == nil {
+		t.Error("listen LSM link is nil")
+	}
+	if loader.ptraceLink == nil {
+		t.Error("ptrace LSM link is nil")
+	}
+	if loader.mountLink == nil {
+		t.Error("mount LSM link is nil")
+	}
 }
 
 func TestLSM_PolicyMapCRUD(t *testing.T) {
@@ -471,6 +483,194 @@ func TestLSM_WASMFeedbackLoop(t *testing.T) {
 
 	// Clean up
 	pm.Clear()
+	loader.SetEnforceMode(false)
+}
+
+func TestLSM_BindBlocked(t *testing.T) {
+	requireRoot(t)
+	requireLSM(t)
+
+	loader, err := LoadLSM()
+	if err != nil {
+		t.Fatalf("LoadLSM failed: %v", err)
+	}
+	defer loader.Close()
+
+	if err := loader.SetEnforceMode(true); err != nil {
+		t.Fatalf("SetEnforceMode failed: %v", err)
+	}
+
+	// Block binding to 127.0.0.1:9999
+	ip := net.ParseIP("127.0.0.1").To4()
+	addr := binary.LittleEndian.Uint32(ip)
+	port := uint16(9999)
+	portBE := uint16(port>>8) | uint16(port<<8) // network byte order
+	addrHash := HashIPv4Endpoint(addr, portBE)
+
+	pm := loader.PolicyMap()
+	key := PolicyKey{
+		CgroupID:  0,
+		RuleHash:  addrHash,
+		EventType: EventTypeBind,
+	}
+	val := PolicyValue{Action: ActionDeny}
+	if err := pm.policyMap.Put(key, val); err != nil {
+		t.Fatalf("put bind deny rule: %v", err)
+	}
+
+	// Attempt to bind — should get EPERM
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		t.Fatalf("socket: %v", err)
+	}
+	defer syscall.Close(fd)
+
+	sa := &syscall.SockaddrInet4{Port: int(port), Addr: [4]byte{127, 0, 0, 1}}
+	err = syscall.Bind(fd, sa)
+	if err == nil {
+		t.Fatal("expected bind to be blocked, but it succeeded")
+	}
+	if !isPermissionError(err) {
+		t.Logf("bind failed with: %v (expected permission error)", err)
+	}
+
+	// Clean up
+	pm.policyMap.Delete(key)
+	loader.SetEnforceMode(false)
+}
+
+func TestLSM_ListenBlocked(t *testing.T) {
+	requireRoot(t)
+	requireLSM(t)
+
+	loader, err := LoadLSM()
+	if err != nil {
+		t.Fatalf("LoadLSM failed: %v", err)
+	}
+	defer loader.Close()
+
+	if err := loader.SetEnforceMode(true); err != nil {
+		t.Fatalf("SetEnforceMode failed: %v", err)
+	}
+
+	// Block listening on port 9998
+	port := uint16(9998)
+	portHash := HashPort(port)
+
+	pm := loader.PolicyMap()
+	key := PolicyKey{
+		CgroupID:  0,
+		RuleHash:  portHash,
+		EventType: EventTypeListen,
+	}
+	val := PolicyValue{Action: ActionDeny}
+	if err := pm.policyMap.Put(key, val); err != nil {
+		t.Fatalf("put listen deny rule: %v", err)
+	}
+
+	// Create a socket and bind it first (to port 9998)
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)
+	if err != nil {
+		t.Fatalf("socket: %v", err)
+	}
+	defer syscall.Close(fd)
+
+	sa := &syscall.SockaddrInet4{Port: int(port), Addr: [4]byte{127, 0, 0, 1}}
+	if err := syscall.Bind(fd, sa); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+
+	// Attempt to listen — should get EPERM
+	err = syscall.Listen(fd, 1)
+	if err == nil {
+		t.Fatal("expected listen to be blocked, but it succeeded")
+	}
+	if !isPermissionError(err) {
+		t.Logf("listen failed with: %v (expected permission error)", err)
+	}
+
+	// Clean up
+	pm.policyMap.Delete(key)
+	loader.SetEnforceMode(false)
+}
+
+func TestLSM_PtraceBlocked(t *testing.T) {
+	requireRoot(t)
+	requireLSM(t)
+
+	loader, err := LoadLSM()
+	if err != nil {
+		t.Fatalf("LoadLSM failed: %v", err)
+	}
+	defer loader.Close()
+
+	if err := loader.SetEnforceMode(true); err != nil {
+		t.Fatalf("SetEnforceMode failed: %v", err)
+	}
+
+	// Start a child process that we'll try to ptrace
+	cmd := exec.Command("/bin/sleep", "10")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start sleep: %v", err)
+	}
+	defer cmd.Process.Kill()
+
+	// Block ptracing "sleep"
+	pm := loader.PolicyMap()
+	if err := pm.SetRule(0, EventTypePtrace, "sleep", ActionDeny, false); err != nil {
+		t.Fatalf("SetRule deny ptrace sleep: %v", err)
+	}
+
+	// Attempt to ptrace attach — should get EPERM
+	err = syscall.PtraceAttach(cmd.Process.Pid)
+	if err == nil {
+		syscall.PtraceDetach(cmd.Process.Pid)
+		t.Fatal("expected ptrace to be blocked, but it succeeded")
+	}
+	if !isPermissionError(err) {
+		t.Logf("ptrace failed with: %v (expected permission error)", err)
+	}
+
+	// Clean up
+	pm.DeleteRule(0, EventTypePtrace, "sleep")
+	loader.SetEnforceMode(false)
+}
+
+func TestLSM_MountBlocked(t *testing.T) {
+	requireRoot(t)
+	requireLSM(t)
+
+	loader, err := LoadLSM()
+	if err != nil {
+		t.Fatalf("LoadLSM failed: %v", err)
+	}
+	defer loader.Close()
+
+	if err := loader.SetEnforceMode(true); err != nil {
+		t.Fatalf("SetEnforceMode failed: %v", err)
+	}
+
+	// Block mounting "proc" filesystem type
+	pm := loader.PolicyMap()
+	if err := pm.SetRule(0, EventTypeMount, "proc", ActionDeny, false); err != nil {
+		t.Fatalf("SetRule deny mount proc: %v", err)
+	}
+
+	// Create a temp dir as mount target
+	target := t.TempDir()
+
+	// Attempt to mount proc — should get EPERM
+	err = syscall.Mount("none", target, "proc", 0, "")
+	if err == nil {
+		syscall.Unmount(target, 0)
+		t.Fatal("expected mount to be blocked, but it succeeded")
+	}
+	if !isPermissionError(err) {
+		t.Logf("mount failed with: %v (expected permission error)", err)
+	}
+
+	// Clean up
+	pm.DeleteRule(0, EventTypeMount, "proc")
 	loader.SetEnforceMode(false)
 }
 

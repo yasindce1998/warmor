@@ -22,6 +22,10 @@ import (
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event -type policy_key -type policy_value lsm_exec ../../bpf/lsm_exec.bpf.c -- -I/usr/include/bpf
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event lsm_file ../../bpf/lsm_file.bpf.c -- -I/usr/include/bpf
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_connect ../../bpf/lsm_connect.bpf.c -- -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_bind ../../bpf/lsm_bind.bpf.c -- -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_listen ../../bpf/lsm_listen.bpf.c -- -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_ptrace ../../bpf/lsm_ptrace.bpf.c -- -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_mount ../../bpf/lsm_mount.bpf.c -- -I/usr/include/bpf
 
 // LSMEvent matches struct lsm_event in warmor_lsm.h
 type LSMEvent struct {
@@ -56,7 +60,7 @@ func (e *LSMEvent) ToEvent() Event {
 		ev.Kind = EventKindProcess
 	case EventTypeFile:
 		ev.Kind = EventKindFile
-	case EventTypeNetwork:
+	case EventTypeNetwork, EventTypeBind:
 		ev.Kind = EventKindNetwork
 		ev.RemotePort = e.RemotePort
 		if e.RemoteAddrV4 != 0 {
@@ -66,6 +70,13 @@ func (e *LSMEvent) ToEvent() Event {
 			ev.RemoteAddr = net.IP(e.RemoteAddrV6[:]).String()
 			ev.Family = 10
 		}
+	case EventTypeListen:
+		ev.Kind = EventKindNetwork
+		ev.RemotePort = e.RemotePort
+	case EventTypePtrace:
+		ev.Kind = EventKindProcess
+	case EventTypeMount:
+		ev.Kind = EventKindFile
 	}
 
 	return ev
@@ -76,10 +87,18 @@ type LSMLoader struct {
 	execObjs    *lsm_execObjects
 	fileObjs    *lsm_fileObjects
 	connectObjs *lsm_connectObjects
+	bindObjs    *lsm_bindObjects
+	listenObjs  *lsm_listenObjects
+	ptraceObjs  *lsm_ptraceObjects
+	mountObjs   *lsm_mountObjects
 
 	execLink    link.Link
 	fileLink    link.Link
 	connectLink link.Link
+	bindLink    link.Link
+	listenLink  link.Link
+	ptraceLink  link.Link
+	mountLink   link.Link
 
 	lsmReader  *ringbuf.Reader
 	policyMap  *PolicyMapManager
@@ -181,6 +200,106 @@ func LoadLSM() (*LSMLoader, error) {
 	}
 	l.connectLink = connectLnk
 
+	// Load bind LSM — reuse maps from exec
+	l.bindObjs = &lsm_bindObjects{}
+	bindOpts := &ciliumebpf.CollectionOptions{
+		Maps: ciliumebpf.MapOptions{},
+	}
+	bindOpts.MapReplacements = map[string]*ciliumebpf.Map{
+		"policy_map":        l.execObjs.PolicyMap,
+		"lsm_events":       l.execObjs.LsmEvents,
+		"lsm_cgroup_filter": l.execObjs.LsmCgroupFilter,
+		"lsm_enforce":      l.execObjs.LsmEnforce,
+	}
+	if err := loadLsm_bindObjects(l.bindObjs, bindOpts); err != nil {
+		l.Close()
+		return nil, fmt.Errorf("load lsm_bind objects: %w", err)
+	}
+
+	bindLnk, err := link.AttachLSM(link.LSMOptions{
+		Program: l.bindObjs.LsmBindCheck,
+	})
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("attach lsm/socket_bind: %w", err)
+	}
+	l.bindLink = bindLnk
+
+	// Load listen LSM — reuse maps from exec
+	l.listenObjs = &lsm_listenObjects{}
+	listenOpts := &ciliumebpf.CollectionOptions{
+		Maps: ciliumebpf.MapOptions{},
+	}
+	listenOpts.MapReplacements = map[string]*ciliumebpf.Map{
+		"policy_map":        l.execObjs.PolicyMap,
+		"lsm_events":       l.execObjs.LsmEvents,
+		"lsm_cgroup_filter": l.execObjs.LsmCgroupFilter,
+		"lsm_enforce":      l.execObjs.LsmEnforce,
+	}
+	if err := loadLsm_listenObjects(l.listenObjs, listenOpts); err != nil {
+		l.Close()
+		return nil, fmt.Errorf("load lsm_listen objects: %w", err)
+	}
+
+	listenLnk, err := link.AttachLSM(link.LSMOptions{
+		Program: l.listenObjs.LsmListenCheck,
+	})
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("attach lsm/socket_listen: %w", err)
+	}
+	l.listenLink = listenLnk
+
+	// Load ptrace LSM — reuse maps from exec
+	l.ptraceObjs = &lsm_ptraceObjects{}
+	ptraceOpts := &ciliumebpf.CollectionOptions{
+		Maps: ciliumebpf.MapOptions{},
+	}
+	ptraceOpts.MapReplacements = map[string]*ciliumebpf.Map{
+		"policy_map":        l.execObjs.PolicyMap,
+		"lsm_events":       l.execObjs.LsmEvents,
+		"lsm_cgroup_filter": l.execObjs.LsmCgroupFilter,
+		"lsm_enforce":      l.execObjs.LsmEnforce,
+	}
+	if err := loadLsm_ptraceObjects(l.ptraceObjs, ptraceOpts); err != nil {
+		l.Close()
+		return nil, fmt.Errorf("load lsm_ptrace objects: %w", err)
+	}
+
+	ptraceLnk, err := link.AttachLSM(link.LSMOptions{
+		Program: l.ptraceObjs.LsmPtraceCheck,
+	})
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("attach lsm/ptrace_access_check: %w", err)
+	}
+	l.ptraceLink = ptraceLnk
+
+	// Load mount LSM — reuse maps from exec
+	l.mountObjs = &lsm_mountObjects{}
+	mountOpts := &ciliumebpf.CollectionOptions{
+		Maps: ciliumebpf.MapOptions{},
+	}
+	mountOpts.MapReplacements = map[string]*ciliumebpf.Map{
+		"policy_map":        l.execObjs.PolicyMap,
+		"lsm_events":       l.execObjs.LsmEvents,
+		"lsm_cgroup_filter": l.execObjs.LsmCgroupFilter,
+		"lsm_enforce":      l.execObjs.LsmEnforce,
+	}
+	if err := loadLsm_mountObjects(l.mountObjs, mountOpts); err != nil {
+		l.Close()
+		return nil, fmt.Errorf("load lsm_mount objects: %w", err)
+	}
+
+	mountLnk, err := link.AttachLSM(link.LSMOptions{
+		Program: l.mountObjs.LsmMountCheck,
+	})
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("attach lsm/sb_mount: %w", err)
+	}
+	l.mountLink = mountLnk
+
 	// Open ring buffer reader on shared lsm_events
 	rd, err := ringbuf.NewReader(l.execObjs.LsmEvents)
 	if err != nil {
@@ -194,7 +313,7 @@ func LoadLSM() (*LSMLoader, error) {
 	l.enforceMap = l.execObjs.LsmEnforce
 	l.filterMap = l.execObjs.LsmCgroupFilter
 
-	log.Println("LSM-BPF programs loaded: bprm_check_security, file_open, socket_connect")
+	log.Println("LSM-BPF programs loaded: bprm_check_security, file_open, socket_connect, socket_bind, socket_listen, ptrace_access_check, sb_mount")
 	return l, nil
 }
 
@@ -243,7 +362,7 @@ func (l *LSMLoader) Close() error {
 		}
 	}
 
-	for _, lnk := range []link.Link{l.execLink, l.fileLink, l.connectLink} {
+	for _, lnk := range []link.Link{l.execLink, l.fileLink, l.connectLink, l.bindLink, l.listenLink, l.ptraceLink, l.mountLink} {
 		if lnk != nil {
 			if err := lnk.Close(); err != nil {
 				errs = append(errs, err)
@@ -251,7 +370,7 @@ func (l *LSMLoader) Close() error {
 		}
 	}
 
-	for _, obj := range []interface{ Close() error }{l.execObjs, l.fileObjs, l.connectObjs} {
+	for _, obj := range []interface{ Close() error }{l.execObjs, l.fileObjs, l.connectObjs, l.bindObjs, l.listenObjs, l.ptraceObjs, l.mountObjs} {
 		if obj != nil {
 			if err := obj.Close(); err != nil {
 				errs = append(errs, err)

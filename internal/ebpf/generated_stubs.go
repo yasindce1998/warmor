@@ -148,3 +148,99 @@ func (o *lsm_connectObjects) Close() error { return nil }
 func loadLsm_connectObjects(_ *lsm_connectObjects, _ *ebpf.CollectionOptions) error {
 	return nil
 }
+
+// --- lsm_bind ---
+
+type lsm_bindObjects struct {
+	lsm_bindPrograms
+	lsm_bindMaps
+}
+
+type lsm_bindPrograms struct {
+	LsmBindCheck *ebpf.Program `ebpf:"lsm_bind_check"`
+}
+
+type lsm_bindMaps struct {
+	PolicyMap       *ebpf.Map `ebpf:"policy_map"`
+	LsmEvents       *ebpf.Map `ebpf:"lsm_events"`
+	LsmCgroupFilter *ebpf.Map `ebpf:"lsm_cgroup_filter"`
+	LsmEnforce      *ebpf.Map `ebpf:"lsm_enforce"`
+}
+
+func (o *lsm_bindObjects) Close() error { return nil }
+
+func loadLsm_bindObjects(_ *lsm_bindObjects, _ *ebpf.CollectionOptions) error {
+	return nil
+}
+
+// --- lsm_listen ---
+
+type lsm_listenObjects struct {
+	lsm_listenPrograms
+	lsm_listenMaps
+}
+
+type lsm_listenPrograms struct {
+	LsmListenCheck *ebpf.Program `ebpf:"lsm_listen_check"`
+}
+
+type lsm_listenMaps struct {
+	PolicyMap       *ebpf.Map `ebpf:"policy_map"`
+	LsmEvents       *ebpf.Map `ebpf:"lsm_events"`
+	LsmCgroupFilter *ebpf.Map `ebpf:"lsm_cgroup_filter"`
+	LsmEnforce      *ebpf.Map `ebpf:"lsm_enforce"`
+}
+
+func (o *lsm_listenObjects) Close() error { return nil }
+
+func loadLsm_listenObjects(_ *lsm_listenObjects, _ *ebpf.CollectionOptions) error {
+	return nil
+}
+
+// --- lsm_ptrace ---
+
+type lsm_ptraceObjects struct {
+	lsm_ptracePrograms
+	lsm_ptraceMaps
+}
+
+type lsm_ptracePrograms struct {
+	LsmPtraceCheck *ebpf.Program `ebpf:"lsm_ptrace_check"`
+}
+
+type lsm_ptraceMaps struct {
+	PolicyMap       *ebpf.Map `ebpf:"policy_map"`
+	LsmEvents       *ebpf.Map `ebpf:"lsm_events"`
+	LsmCgroupFilter *ebpf.Map `ebpf:"lsm_cgroup_filter"`
+	LsmEnforce      *ebpf.Map `ebpf:"lsm_enforce"`
+}
+
+func (o *lsm_ptraceObjects) Close() error { return nil }
+
+func loadLsm_ptraceObjects(_ *lsm_ptraceObjects, _ *ebpf.CollectionOptions) error {
+	return nil
+}
+
+// --- lsm_mount ---
+
+type lsm_mountObjects struct {
+	lsm_mountPrograms
+	lsm_mountMaps
+}
+
+type lsm_mountPrograms struct {
+	LsmMountCheck *ebpf.Program `ebpf:"lsm_mount_check"`
+}
+
+type lsm_mountMaps struct {
+	PolicyMap       *ebpf.Map `ebpf:"policy_map"`
+	LsmEvents       *ebpf.Map `ebpf:"lsm_events"`
+	LsmCgroupFilter *ebpf.Map `ebpf:"lsm_cgroup_filter"`
+	LsmEnforce      *ebpf.Map `ebpf:"lsm_enforce"`
+}
+
+func (o *lsm_mountObjects) Close() error { return nil }
+
+func loadLsm_mountObjects(_ *lsm_mountObjects, _ *ebpf.CollectionOptions) error {
+	return nil
+}

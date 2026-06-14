@@ -15,6 +15,10 @@ const (
 	EventTypeExec    uint8 = 0
 	EventTypeFile    uint8 = 1
 	EventTypeNetwork uint8 = 2
+	EventTypeBind    uint8 = 3
+	EventTypeListen  uint8 = 4
+	EventTypePtrace  uint8 = 5
+	EventTypeMount   uint8 = 6
 
 	ActionAllow uint8 = 0
 	ActionDeny  uint8 = 1
@@ -88,6 +92,16 @@ func HashIPv6Endpoint(addr [16]byte, port uint16) uint32 {
 		hash ^= uint32(addr[i])
 		hash *= 16777619
 	}
+	hash ^= uint32(port & 0xFF)
+	hash *= 16777619
+	hash ^= uint32((port >> 8) & 0xFF)
+	hash *= 16777619
+	return hash
+}
+
+// HashPort hashes a 2-byte port value with FNV-1a, matching the BPF-side hash_port.
+func HashPort(port uint16) uint32 {
+	hash := uint32(2166136261)
 	hash ^= uint32(port & 0xFF)
 	hash *= 16777619
 	hash ^= uint32((port >> 8) & 0xFF)
