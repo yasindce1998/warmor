@@ -11,6 +11,7 @@ import (
 	"github.com/yasindce1998/warmor/internal/logging"
 	"github.com/yasindce1998/warmor/internal/metrics"
 	"github.com/yasindce1998/warmor/internal/platform"
+	"github.com/yasindce1998/warmor/internal/streaming"
 	"github.com/yasindce1998/warmor/internal/version"
 	"github.com/yasindce1998/warmor/internal/wasm"
 	"github.com/yasindce1998/warmor/pkg/api"
@@ -27,6 +28,10 @@ type Options struct {
 	// established (fail-closed startup). Without it, an unsupported kernel
 	// degrades to tracepoint-only observation.
 	RequireLSM bool
+
+	// Streaming pipeline configuration
+	StreamSinks []streaming.Sink
+	Labels      map[string]string
 }
 
 // PolicyMapSyncer compiles WASM policy decisions into a kernel BPF map for fast-path enforcement.
@@ -47,6 +52,7 @@ type Enforcer struct {
 	logger        *logging.Logger
 	metricsServer *metrics.Server
 	policyMap     PolicyMapSyncer
+	pipeline      *streaming.Pipeline
 	policyPath    string
 	auditMode     bool
 	ctx           context.Context
@@ -148,6 +154,16 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 	metrics.SetPolicyInfo(policyPath, version.Version)
 	logger.LogInfo(fmt.Sprintf("✓ Metrics server initialized on :%d", port))
 
+	// Initialize streaming pipeline if sinks configured
+	var pipeline *streaming.Pipeline
+	if len(opts.StreamSinks) > 0 {
+		pipeline = streaming.NewPipeline(streaming.PipelineConfig{
+			Sinks:  opts.StreamSinks,
+			Labels: opts.Labels,
+		})
+		logger.LogInfo(fmt.Sprintf("✓ Streaming pipeline active (%d sinks)", len(opts.StreamSinks)))
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &Enforcer{
@@ -159,6 +175,7 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		logger:        logger,
 		metricsServer: metricsServer,
 		policyMap:     policyMapSyncer,
+		pipeline:      pipeline,
 		policyPath:    policyPath,
 		auditMode:     opts.AuditMode,
 		ctx:           ctx,
@@ -214,6 +231,9 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 		e.logger.LogEvent(event, result)
 		metrics.RecordEvent(result.Action.String())
 		metrics.RecordLatency(float64(result.Latency.Microseconds()))
+		if e.pipeline != nil {
+			e.pipeline.Emit(event, result)
+		}
 		return
 	}
 
@@ -260,6 +280,11 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 	metrics.RecordLatency(float64(result.Latency.Microseconds()))
 	if result.Audit {
 		metrics.RecordAuditDenied()
+	}
+
+	// Emit to streaming pipeline
+	if e.pipeline != nil {
+		e.pipeline.Emit(event, result)
 	}
 
 	// Update cache size metric
@@ -434,6 +459,11 @@ func (e *Enforcer) Stop() {
 // Close cleans up resources
 func (e *Enforcer) Close() error {
 	e.logger.LogShutdown()
+
+	// Flush and close the streaming pipeline
+	if e.pipeline != nil {
+		_ = e.pipeline.Close()
+	}
 
 	// Stop metrics server
 	if e.metricsServer != nil {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/yasindce1998/warmor/internal/enforcer"
+	"github.com/yasindce1998/warmor/internal/streaming"
 	"github.com/yasindce1998/warmor/internal/version"
 )
 
@@ -24,6 +25,10 @@ var (
 	cgroupFilter  = flag.String("cgroup-filter", "", "Cgroup paths to filter (comma-separated, or 'auto' for K8s pod discovery)")
 	lsmEnforce    = flag.Bool("lsm-enforce", false, "Enable LSM-BPF kernel-level blocking (requires CONFIG_BPF_LSM)")
 	requireLSM    = flag.Bool("require-lsm", false, "Fail to start unless BPF-LSM kernel enforcement can be loaded (fail-closed; default is to degrade to observe-only)")
+	eventSink     = flag.String("event-sink", "", "Event sinks: stdout, file:<path>, webhook:<url> (comma-separated)")
+	eventFileMax  = flag.Int64("event-file-max", 100*1024*1024, "Max event file size before rotation (bytes)")
+	webhookHeader = flag.String("webhook-header", "", "Webhook auth header (format: Key:Value)")
+	eventLabels   = flag.String("event-labels", "", "Labels to attach to streamed events (format: k=v,k2=v2)")
 	showVersion   = flag.Bool("version", false, "Show version and exit")
 )
 
@@ -69,6 +74,52 @@ func main() {
 		}
 	}
 
+	// Build streaming sinks from --event-sink flag
+	var sinks []streaming.Sink
+	if *eventSink != "" {
+		for _, spec := range strings.Split(*eventSink, ",") {
+			spec = strings.TrimSpace(spec)
+			switch {
+			case spec == "stdout":
+				sinks = append(sinks, streaming.NewStdoutSink())
+			case strings.HasPrefix(spec, "file:"):
+				path := strings.TrimPrefix(spec, "file:")
+				s, err := streaming.NewFileSink(path, *eventFileMax)
+				if err != nil {
+					log.Fatalf("event sink %s: %v", spec, err)
+				}
+				sinks = append(sinks, s)
+			case strings.HasPrefix(spec, "webhook:"):
+				url := strings.TrimPrefix(spec, "webhook:")
+				headers := make(map[string]string)
+				if *webhookHeader != "" {
+					parts := strings.SplitN(*webhookHeader, ":", 2)
+					if len(parts) == 2 {
+						headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+					}
+				}
+				sinks = append(sinks, streaming.NewWebhookSink(streaming.WebhookConfig{
+					URL:     url,
+					Headers: headers,
+				}))
+			default:
+				log.Fatalf("unknown event sink: %s (valid: stdout, file:<path>, webhook:<url>)", spec)
+			}
+		}
+		log.Printf("Event Sinks: %s", *eventSink)
+	}
+
+	// Parse event labels
+	labels := make(map[string]string)
+	if *eventLabels != "" {
+		for _, kv := range strings.Split(*eventLabels, ",") {
+			parts := strings.SplitN(strings.TrimSpace(kv), "=", 2)
+			if len(parts) == 2 {
+				labels[parts[0]] = parts[1]
+			}
+		}
+	}
+
 	// Create enforcer with options
 	enf, err := enforcer.New(ctx, *policyPath, &enforcer.Options{
 		AuditMode:    *auditMode,
@@ -77,6 +128,8 @@ func main() {
 		LogLevel:     *logLevel,
 		LSMEnforce:   *lsmEnforce,
 		RequireLSM:   *requireLSM,
+		StreamSinks:  sinks,
+		Labels:       labels,
 	})
 	if err != nil {
 		log.Fatalf("❌ Failed to create enforcer: %v", err)
