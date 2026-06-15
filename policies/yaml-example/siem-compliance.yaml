@@ -1,0 +1,116 @@
+name: siem-compliance
+version: 1
+description: "Compliance-focused policy that generates rich SIEM events for SOC monitoring"
+
+# Designed to work with the SIEM streaming sink (CEF/Syslog).
+# Every audit/deny action generates a CEF event sent to the configured
+# syslog collector. Structure rules to emit high-fidelity signals that
+# SOC analysts can build detection rules around.
+#
+# SIEM Configuration:
+#   streaming.NewSyslogSink(streaming.SyslogConfig{
+#       Network: "tcp",
+#       Addr:    "siem.corp.internal:514",
+#   })
+
+variables:
+  pci_sensitive_paths:
+    - "/var/lib/mysql"
+    - "/var/lib/postgresql"
+    - "/opt/app/data"
+    - "/etc/ssl/private"
+  hipaa_phi_paths:
+    - "/var/data/patients"
+    - "/opt/ehr"
+    - "/var/lib/fhir"
+  admin_tools:
+    - "/usr/bin/sudo"
+    - "/usr/bin/su"
+    - "/usr/bin/passwd"
+    - "/usr/sbin/useradd"
+    - "/usr/sbin/usermod"
+    - "/usr/sbin/visudo"
+  data_transfer_tools:
+    - "/usr/bin/scp"
+    - "/usr/bin/rsync"
+    - "/usr/bin/sftp"
+    - "/usr/bin/curl"
+    - "/usr/bin/wget"
+
+rules:
+  # PCI-DSS: Log all access to cardholder data
+  - name: pci-data-access
+    event: file
+    conditions:
+      all:
+        - path: { starts_with_any: $pci_sensitive_paths }
+    action: audit
+    reason: "PCI-DSS: Access to cardholder data environment"
+
+  # HIPAA: Log all PHI access
+  - name: hipaa-phi-access
+    event: file
+    conditions:
+      all:
+        - path: { starts_with_any: $hipaa_phi_paths }
+    action: audit
+    reason: "HIPAA: Protected health information access"
+
+  # SOX: Admin actions audit trail
+  - name: admin-action-audit
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $admin_tools }
+    action: audit
+    reason: "SOX: Administrative action executed"
+
+  # Detect bulk data export attempts
+  - name: bulk-data-export
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $data_transfer_tools }
+    action: audit
+    reason: "Data transfer tool executed (potential exfiltration)"
+
+  # Block direct database port access from non-app users
+  - name: block-direct-db-access
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [3306, 5432, 1433, 27017, 6379] }
+        - uid: { not_any_of: [999, 1000] }
+    action: deny
+    reason: "Direct database access from unauthorized UID"
+
+  # Detect lateral movement via SSH
+  - name: ssh-lateral-movement
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 22 }
+        - comm: { any_of: ["ssh", "sshd"] }
+    action: audit
+    reason: "SSH connection (potential lateral movement)"
+
+  # Detect privilege escalation
+  - name: privilege-escalation-attempt
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/usr/bin/sudo", "/usr/bin/su", "/usr/bin/pkexec"] }
+        - uid: { not_equals: 0 }
+    action: audit
+    reason: "Privilege escalation attempt by non-root user"
+
+  # Block outbound on non-standard ports (suspicious C2)
+  - name: suspicious-c2-channel
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [4444, 5555, 6666, 1234, 31337, 12345] }
+    action: deny
+    reason: "Connection to common C2/backdoor port"
+
+default_action: allow

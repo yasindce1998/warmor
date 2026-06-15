@@ -1,0 +1,94 @@
+name: advanced-network-filter
+version: 1
+description: "Network filtering with CIDR blocklists and rate limiting for production workloads"
+
+# This policy works in conjunction with the NetFilter enforcement layer.
+# The NetFilter handles blocklist/rate-limit checks BEFORE policy evaluation,
+# while these rules handle higher-level network decisions.
+
+variables:
+  known_c2_ranges:
+    - "185.220.100.0/24"
+    - "45.154.255.0/24"
+    - "23.129.64.0/24"
+  cloud_metadata_ips:
+    - "169.254.169.254"
+    - "fd00:ec2::254"
+  internal_subnets:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  dns_resolvers:
+    - "10.0.0.2"
+    - "10.0.0.3"
+  crypto_mining_ports:
+    - 3333
+    - 4444
+    - 5555
+    - 7777
+    - 8888
+    - 9999
+    - 14444
+    - 14433
+
+rules:
+  - name: block-cloud-metadata-ssrf
+    event: network
+    conditions:
+      all:
+        - remote_ip: { any_of: $cloud_metadata_ips }
+    action: deny
+    reason: "Cloud metadata endpoint access (SSRF risk)"
+
+  - name: block-crypto-mining-pools
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: $crypto_mining_ports }
+    action: deny
+    reason: "Connection to known crypto mining pool port"
+
+  - name: block-known-c2
+    event: network
+    conditions:
+      all:
+        - remote_ip: { in_cidr: $known_c2_ranges }
+    action: deny
+    reason: "Connection to known C2 infrastructure"
+
+  - name: allow-dns
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [53, 853] }
+        - remote_ip: { any_of: $dns_resolvers }
+    action: allow
+    reason: "DNS to approved resolvers"
+
+  - name: block-external-dns
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [53, 853] }
+        - remote_ip: { not_any_of: $dns_resolvers }
+    action: deny
+    reason: "DNS to unapproved resolver (possible DNS exfiltration)"
+
+  - name: audit-unusual-egress
+    event: network
+    conditions:
+      all:
+        - remote_ip: { not_in_cidr: $internal_subnets }
+        - remote_port: { not_any_of: [80, 443, 8080, 8443] }
+    action: audit
+    reason: "Unusual egress port to external host"
+
+default_action: allow
+
+# NetFilter configuration (applied via enforcer.Options):
+# netfilter:
+#   block_cidrs:
+#     - "169.254.169.254/32"  # Cloud metadata
+#     - "fc00::/7"            # IPv6 ULA
+#   rate_limit: 100           # Max connections per process per window
+#   window: 60s

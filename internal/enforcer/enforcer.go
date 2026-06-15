@@ -33,6 +33,10 @@ type Options struct {
 	// Streaming pipeline configuration
 	StreamSinks []streaming.Sink
 	Labels      map[string]string
+
+	// Advanced enforcement
+	NetFilterConfig  *NetFilterConfig
+	SandboxProfiles  []*SandboxProfile
 }
 
 // PolicyMapSyncer compiles WASM policy decisions into a kernel BPF map for fast-path enforcement.
@@ -55,6 +59,8 @@ type Enforcer struct {
 	policyMap     PolicyMapSyncer
 	pipeline      *streaming.Pipeline
 	lineageTracker *lineage.Tracker
+	netFilter     *NetFilter
+	sandbox       *SandboxManager
 	policyPath    string
 	auditMode     bool
 	ctx           context.Context
@@ -171,23 +177,47 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		logger.LogInfo(fmt.Sprintf("✓ Streaming pipeline active (%d sinks)", len(opts.StreamSinks)))
 	}
 
+	// Initialize network filter if configured
+	var netFilter *NetFilter
+	if opts.NetFilterConfig != nil {
+		nf, err := NewNetFilter(*opts.NetFilterConfig)
+		if err != nil {
+			wasmRuntime.Close(ctx)
+			plat.Close()
+			return nil, fmt.Errorf("initialize net filter: %w", err)
+		}
+		netFilter = nf
+		logger.LogInfo(fmt.Sprintf("✓ Network filter active (%d CIDRs blocked, rate limit=%d/window)",
+			nf.BlocklistSize(), opts.NetFilterConfig.RateLimit))
+	}
+
+	// Initialize sandbox manager
+	sandboxProfiles := opts.SandboxProfiles
+	if sandboxProfiles == nil {
+		sandboxProfiles = DefaultProfiles()
+	}
+	sandboxMgr := NewSandboxManager(sandboxProfiles...)
+	logger.LogInfo(fmt.Sprintf("✓ Sandbox manager active (%d profiles)", len(sandboxMgr.ListProfiles())))
+
 	ctx, cancel := context.WithCancel(ctx)
 
 	return &Enforcer{
-		platform:      plat,
-		wasmRuntime:   wasmRuntime,
-		evaluator:     evaluator,
-		cache:         decisionCache,
-		actionHandler: actionHandler,
-		logger:        logger,
-		metricsServer: metricsServer,
+		platform:       plat,
+		wasmRuntime:    wasmRuntime,
+		evaluator:      evaluator,
+		cache:          decisionCache,
+		actionHandler:  actionHandler,
+		logger:         logger,
+		metricsServer:  metricsServer,
 		policyMap:      policyMapSyncer,
 		pipeline:       pipeline,
 		lineageTracker: tracker,
+		netFilter:      netFilter,
+		sandbox:        sandboxMgr,
 		policyPath:     policyPath,
-		auditMode:     opts.AuditMode,
-		ctx:           ctx,
-		cancel:        cancel,
+		auditMode:      opts.AuditMode,
+		ctx:            ctx,
+		cancel:         cancel,
 	}, nil
 }
 
@@ -239,6 +269,63 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 			filename = event.Process.Filename
 		}
 		e.lineageTracker.RecordExec(event.PID, 0, event.UID, event.GID, event.Comm, filename)
+	}
+
+	// Network filter: check blocklist and rate limit before policy eval
+	if e.netFilter != nil && event.GetType() == api.EventTypeNetwork {
+		remoteAddr := ""
+		if event.Network != nil {
+			remoteAddr = event.Network.RemoteAddr
+		}
+		if remoteAddr != "" && e.netFilter.IsBlocked(remoteAddr) {
+			result := &api.ActionResult{
+				Action:    api.ActionDeny,
+				Reason:    fmt.Sprintf("network blocked: %s in CIDR blocklist", remoteAddr),
+				Timestamp: time.Now(),
+			}
+			_ = e.actionHandler.Enforce(e.ctx, event, result)
+			e.logger.LogEvent(event, result)
+			metrics.RecordEvent(result.Action.String())
+			if e.pipeline != nil {
+				e.pipeline.Emit(event, result)
+			}
+			return
+		}
+		if e.netFilter.CheckRateLimit(event.PID) {
+			result := &api.ActionResult{
+				Action:    api.ActionDeny,
+				Reason:    fmt.Sprintf("rate limit exceeded for pid %d", event.PID),
+				Timestamp: time.Now(),
+			}
+			_ = e.actionHandler.Enforce(e.ctx, event, result)
+			e.logger.LogEvent(event, result)
+			metrics.RecordEvent(result.Action.String())
+			if e.pipeline != nil {
+				e.pipeline.Emit(event, result)
+			}
+			return
+		}
+	}
+
+	// Sandbox violation check: if a sandboxed process attempts a restricted action
+	if e.sandbox != nil {
+		action := eventTypeToSandboxAction(event)
+		if action != "" {
+			if reason := e.sandbox.CheckViolation(event.PID, action); reason != "" {
+				result := &api.ActionResult{
+					Action:    api.ActionDeny,
+					Reason:    reason,
+					Timestamp: time.Now(),
+				}
+				_ = e.actionHandler.Enforce(e.ctx, event, result)
+				e.logger.LogEvent(event, result)
+				metrics.RecordEvent(result.Action.String())
+				if e.pipeline != nil {
+					e.pipeline.Emit(event, result)
+				}
+				return
+			}
+		}
 	}
 
 	// Check cache first
@@ -457,6 +544,23 @@ func (e *Enforcer) ReloadPolicy() error {
 	e.logger.LogInfo("✓ Policy reloaded successfully")
 	metrics.SetPolicyInfo(e.policyPath, version.Version)
 	return nil
+}
+
+// NetFilter returns the enforcer's network filter (nil if not configured).
+func (e *Enforcer) NetFilter() *NetFilter { return e.netFilter }
+
+// Sandbox returns the enforcer's sandbox manager.
+func (e *Enforcer) Sandbox() *SandboxManager { return e.sandbox }
+
+func eventTypeToSandboxAction(event *api.Event) string {
+	switch event.GetType() {
+	case api.EventTypeNetwork:
+		return "network"
+	case api.EventTypeFile:
+		return "write"
+	default:
+		return ""
+	}
 }
 
 // Stop stops the enforcer

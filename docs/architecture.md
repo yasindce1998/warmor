@@ -1,8 +1,8 @@
 # warmor Architecture
 
-**Version:** 1.3.0-beta  
-**Last Updated:** 2026-06-12  
-**Status:** Phase 6 Complete — Testing & Validation
+**Version:** 1.4.0-beta  
+**Last Updated:** 2026-06-15  
+**Status:** Phase 7 Complete — Advanced Enforcement & SIEM
 
 ---
 

@@ -1,0 +1,94 @@
+name: process-sandboxing
+version: 1
+description: "Process sandboxing policy that triggers sandbox escalation on suspicious behavior"
+
+# This policy complements the SandboxManager. When a process matches
+# a rule with action=deny, the enforcer can escalate to applying a
+# sandbox profile (strict, network-deny, readonly, limited) on that PID.
+#
+# Sandbox profiles are pre-registered at enforcer startup. Once applied,
+# all subsequent events from that PID are checked against the sandbox
+# restrictions BEFORE policy evaluation.
+
+variables:
+  high_risk_binaries:
+    - "/tmp"
+    - "/var/tmp"
+    - "/dev/shm"
+  debug_tools:
+    - "/usr/bin/gdb"
+    - "/usr/bin/strace"
+    - "/usr/bin/ltrace"
+    - "/usr/bin/ptrace"
+    - "/usr/bin/perf"
+  container_escape_paths:
+    - "/proc/sys"
+    - "/sys/fs/cgroup"
+    - "/proc/sysrq-trigger"
+    - "/.dockerenv"
+  sensitive_mounts:
+    - "/etc/shadow"
+    - "/etc/passwd"
+    - "/etc/sudoers"
+    - "/root/.ssh"
+    - "/var/run/docker.sock"
+
+rules:
+  - name: sandbox-temp-exec
+    event: process
+    conditions:
+      all:
+        - path: { starts_with_any: $high_risk_binaries }
+    action: deny
+    reason: "Execution from temp directory (apply sandbox: strict)"
+    # sandbox_profile: strict
+
+  - name: sandbox-debug-tools
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $debug_tools }
+        - uid: { not_equals: 0 }
+    action: deny
+    reason: "Debug/tracing tool by non-root (apply sandbox: limited)"
+    # sandbox_profile: limited
+
+  - name: block-container-escape
+    event: file
+    conditions:
+      all:
+        - path: { starts_with_any: $container_escape_paths }
+        - operation: { any_of: ["write", "append"] }
+    action: deny
+    reason: "Write to container escape vector (apply sandbox: strict)"
+    # sandbox_profile: strict
+
+  - name: audit-sensitive-read
+    event: file
+    conditions:
+      all:
+        - path: { any_of: $sensitive_mounts }
+        - operation: { equals: "read" }
+    action: audit
+    reason: "Read of sensitive credential file"
+
+  - name: sandbox-unauthorized-mount
+    event: process
+    conditions:
+      all:
+        - comm: { equals: "mount" }
+        - uid: { not_equals: 0 }
+    action: deny
+    reason: "Non-root mount attempt (apply sandbox: strict)"
+    # sandbox_profile: strict
+
+  - name: block-kernel-module
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["insmod", "modprobe", "rmmod"] }
+    action: deny
+    reason: "Kernel module operation (apply sandbox: strict)"
+    # sandbox_profile: strict
+
+default_action: allow
