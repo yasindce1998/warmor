@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/yasindce1998/warmor/internal/cache"
+	"github.com/yasindce1998/warmor/internal/lineage"
 	"github.com/yasindce1998/warmor/internal/logging"
 	"github.com/yasindce1998/warmor/internal/metrics"
 	"github.com/yasindce1998/warmor/internal/platform"
@@ -53,6 +54,7 @@ type Enforcer struct {
 	metricsServer *metrics.Server
 	policyMap     PolicyMapSyncer
 	pipeline      *streaming.Pipeline
+	lineageTracker *lineage.Tracker
 	policyPath    string
 	auditMode     bool
 	ctx           context.Context
@@ -154,12 +156,17 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 	metrics.SetPolicyInfo(policyPath, version.Version)
 	logger.LogInfo(fmt.Sprintf("✓ Metrics server initialized on :%d", port))
 
+	// Initialize process lineage tracker
+	tracker := lineage.NewTracker(lineage.TrackerConfig{})
+
 	// Initialize streaming pipeline if sinks configured
 	var pipeline *streaming.Pipeline
 	if len(opts.StreamSinks) > 0 {
+		enrichers := []streaming.Enricher{lineage.NewEnricher(tracker)}
 		pipeline = streaming.NewPipeline(streaming.PipelineConfig{
-			Sinks:  opts.StreamSinks,
-			Labels: opts.Labels,
+			Sinks:     opts.StreamSinks,
+			Labels:    opts.Labels,
+			Enrichers: enrichers,
 		})
 		logger.LogInfo(fmt.Sprintf("✓ Streaming pipeline active (%d sinks)", len(opts.StreamSinks)))
 	}
@@ -174,9 +181,10 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		actionHandler: actionHandler,
 		logger:        logger,
 		metricsServer: metricsServer,
-		policyMap:     policyMapSyncer,
-		pipeline:      pipeline,
-		policyPath:    policyPath,
+		policyMap:      policyMapSyncer,
+		pipeline:       pipeline,
+		lineageTracker: tracker,
+		policyPath:     policyPath,
 		auditMode:     opts.AuditMode,
 		ctx:           ctx,
 		cancel:        cancel,
@@ -224,6 +232,15 @@ func (e *Enforcer) eventLoop() {
 
 // handleEvent processes a single event with caching and metrics
 func (e *Enforcer) handleEvent(event *api.Event) {
+	// Record process exec in lineage tracker
+	if event.GetType() == api.EventTypeProcess {
+		filename := event.Filename
+		if event.Process != nil {
+			filename = event.Process.Filename
+		}
+		e.lineageTracker.RecordExec(event.PID, 0, event.UID, event.GID, event.Comm, filename)
+	}
+
 	// Check cache first
 	if result, hit := e.cache.Get(event); hit {
 		metrics.RecordCacheHit()
