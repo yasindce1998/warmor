@@ -235,3 +235,143 @@ func TestWASMDownload(t *testing.T) {
 		t.Error("wasm content mismatch")
 	}
 }
+
+func TestRolloutHTTPEndpoints(t *testing.T) {
+	srv, ts := setupTestServer(t)
+	defer ts.Close()
+
+	// Create a policy first
+	dir := t.TempDir()
+	wasmPath := filepath.Join(dir, "policy.wasm")
+	os.WriteFile(wasmPath, []byte("wasm-data"), 0644)
+	srv.Store().CreatePolicy(&Policy{
+		ID:       "web-policy",
+		Name:     "Web Policy",
+		Selector: map[string]string{"tier": "web"},
+		Priority: 10,
+	}, wasmPath)
+
+	// Create rollout
+	cfg, _ := json.Marshal(RolloutConfig{
+		ID:            "canary-1",
+		PolicyID:      "web-policy",
+		TargetVersion: 2,
+		Percentage:    25,
+	})
+	resp, err := http.Post(ts.URL+"/api/v1/admin/rollouts", "application/json", bytes.NewReader(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create rollout: status %d", resp.StatusCode)
+	}
+
+	// List rollouts
+	resp, err = http.Get(ts.URL + "/api/v1/admin/rollouts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rollouts []*RolloutState
+	json.NewDecoder(resp.Body).Decode(&rollouts)
+	resp.Body.Close()
+	if len(rollouts) != 1 {
+		t.Fatalf("expected 1 rollout, got %d", len(rollouts))
+	}
+	if rollouts[0].ID != "canary-1" {
+		t.Errorf("expected id=canary-1, got %s", rollouts[0].ID)
+	}
+
+	// Get specific rollout
+	resp, err = http.Get(ts.URL + "/api/v1/admin/rollouts/canary-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state RolloutState
+	json.NewDecoder(resp.Body).Decode(&state)
+	resp.Body.Close()
+	if state.Percentage != 25 {
+		t.Errorf("expected percentage=25, got %d", state.Percentage)
+	}
+
+	// Update percentage
+	update, _ := json.Marshal(map[string]int{"percentage": 75})
+	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/admin/rollouts/canary-1", bytes.NewReader(update))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	json.NewDecoder(resp.Body).Decode(&state)
+	resp.Body.Close()
+	if state.Percentage != 75 {
+		t.Errorf("expected percentage=75 after update, got %d", state.Percentage)
+	}
+
+	// Abort rollout
+	req, _ = http.NewRequest(http.MethodDelete, ts.URL+"/api/v1/admin/rollouts/canary-1", nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("abort rollout: status %d", resp.StatusCode)
+	}
+
+	// Verify aborted
+	resp, _ = http.Get(ts.URL + "/api/v1/admin/rollouts/canary-1")
+	json.NewDecoder(resp.Body).Decode(&state)
+	resp.Body.Close()
+	if state.Status != "aborted" {
+		t.Errorf("expected status=aborted, got %s", state.Status)
+	}
+}
+
+func TestRolloutAffectsPolicyDistribution(t *testing.T) {
+	srv, ts := setupTestServer(t)
+	defer ts.Close()
+
+	dir := t.TempDir()
+	wasmPath := filepath.Join(dir, "policy.wasm")
+	os.WriteFile(wasmPath, []byte("wasm-v1"), 0644)
+
+	srv.Store().CreatePolicy(&Policy{
+		ID:       "app-policy",
+		Name:     "App Policy",
+		Selector: map[string]string{"app": "web"},
+		Priority: 10,
+	}, wasmPath)
+
+	// Update policy to v2
+	os.WriteFile(wasmPath, []byte("wasm-v2"), 0644)
+	srv.Store().UpdatePolicy("app-policy", wasmPath)
+
+	// Register agent
+	body, _ := json.Marshal(RegisterRequest{
+		ID:     "agent-1",
+		Labels: map[string]string{"app": "web"},
+	})
+	http.Post(ts.URL+"/api/v1/register", "application/json", bytes.NewReader(body))
+
+	// Create rollout at 100% targeting v2
+	srv.Rollouts().CreateRollout(RolloutConfig{
+		ID:            "full-rollout",
+		PolicyID:      "app-policy",
+		TargetVersion: 2,
+		Percentage:    100,
+	})
+
+	// Agent should get v2 via rollout
+	resp, err := http.Get(ts.URL + "/api/v1/policy?agent_id=agent-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var assignment PolicyAssignment
+	json.NewDecoder(resp.Body).Decode(&assignment)
+	resp.Body.Close()
+
+	if assignment.Version != 2 {
+		t.Errorf("expected version=2 with 100%% rollout, got %d", assignment.Version)
+	}
+}

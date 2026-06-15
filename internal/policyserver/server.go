@@ -13,6 +13,7 @@ import (
 // Server is the central policy management HTTP server.
 type Server struct {
 	store      *Store
+	rollouts   *RolloutManager
 	httpServer *http.Server
 	addr       string
 	staleCheck time.Duration
@@ -33,8 +34,10 @@ func NewServer(cfg ServerConfig) *Server {
 		cfg.StaleThreshold = 90 * time.Second
 	}
 
+	store := NewStore()
 	s := &Server{
-		store:      NewStore(),
+		store:      store,
+		rollouts:   NewRolloutManager(store),
 		addr:       cfg.Addr,
 		staleCheck: cfg.StaleThreshold,
 	}
@@ -51,6 +54,8 @@ func NewServer(cfg ServerConfig) *Server {
 	mux.HandleFunc("/api/v1/admin/policies", s.handleAdminPolicies)
 	mux.HandleFunc("/api/v1/admin/policies/", s.handleAdminPolicy)
 	mux.HandleFunc("/api/v1/admin/agents", s.handleAdminAgents)
+	mux.HandleFunc("/api/v1/admin/rollouts", s.handleAdminRollouts)
+	mux.HandleFunc("/api/v1/admin/rollouts/", s.handleAdminRollout)
 
 	s.httpServer = &http.Server{
 		Addr:         cfg.Addr,
@@ -66,6 +71,11 @@ func NewServer(cfg ServerConfig) *Server {
 // Store returns the underlying store for direct manipulation in tests.
 func (s *Server) Store() *Store {
 	return s.store
+}
+
+// Rollouts returns the rollout manager.
+func (s *Server) Rollouts() *RolloutManager {
+	return s.rollouts
 }
 
 // Start begins listening and serving. Blocks until shutdown.
@@ -130,19 +140,12 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return the agent's current policy assignment
+	// Return the agent's current policy assignment via rollout-aware resolution
 	agent, _ := s.store.GetAgent(req.AgentID)
-	policy := s.store.MatchPolicy(agent.Labels)
-	if policy == nil {
+	assignment := s.rollouts.ResolvePolicy(req.AgentID, agent.Labels)
+	if assignment == nil {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "policy": "none"})
 		return
-	}
-
-	assignment := &PolicyAssignment{
-		PolicyID: policy.ID,
-		Version:  policy.Version,
-		WASMHash: policy.WASMHash,
-		WASMPath: policy.WASMPath,
 	}
 	writeJSON(w, http.StatusOK, assignment)
 }
@@ -165,8 +168,8 @@ func (s *Server) handleGetPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policy := s.store.MatchPolicy(agent.Labels)
-	if policy == nil {
+	assignment := s.rollouts.ResolvePolicy(agentID, agent.Labels)
+	if assignment == nil {
 		http.Error(w, "no matching policy", http.StatusNotFound)
 		return
 	}
@@ -176,18 +179,12 @@ func (s *Server) handleGetPolicy(w http.ResponseWriter, r *http.Request) {
 	if ifVersion != "" {
 		var v int64
 		fmt.Sscanf(ifVersion, "%d", &v)
-		if v >= policy.Version {
+		if v >= assignment.Version {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
 	}
 
-	assignment := &PolicyAssignment{
-		PolicyID: policy.ID,
-		Version:  policy.Version,
-		WASMHash: policy.WASMHash,
-		WASMPath: policy.WASMPath,
-	}
 	writeJSON(w, http.StatusOK, assignment)
 }
 
@@ -292,6 +289,77 @@ func (s *Server) handleAdminAgents(w http.ResponseWriter, r *http.Request) {
 	}
 	agents := s.store.ListAgents()
 	writeJSON(w, http.StatusOK, agents)
+}
+
+func (s *Server) handleAdminRollouts(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		rollouts := s.rollouts.ListRollouts()
+		writeJSON(w, http.StatusOK, rollouts)
+
+	case http.MethodPost:
+		var cfg RolloutConfig
+		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if cfg.ID == "" || cfg.PolicyID == "" {
+			http.Error(w, "id and policy_id required", http.StatusBadRequest)
+			return
+		}
+		state, err := s.rollouts.CreateRollout(cfg)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		writeJSON(w, http.StatusCreated, state)
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleAdminRollout(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/rollouts/")
+	if id == "" {
+		http.Error(w, "rollout id required", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		state, ok := s.rollouts.GetRollout(id)
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, state)
+
+	case http.MethodPut:
+		var req struct {
+			Percentage int `json:"percentage"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if err := s.rollouts.UpdatePercentage(id, req.Percentage); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		state, _ := s.rollouts.GetRollout(id)
+		writeJSON(w, http.StatusOK, state)
+
+	case http.MethodDelete:
+		if err := s.rollouts.AbortRollout(id); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
