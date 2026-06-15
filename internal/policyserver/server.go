@@ -178,7 +178,7 @@ func (s *Server) handleGetPolicy(w http.ResponseWriter, r *http.Request) {
 	ifVersion := r.URL.Query().Get("if_version")
 	if ifVersion != "" {
 		var v int64
-		fmt.Sscanf(ifVersion, "%d", &v)
+		_, _ = fmt.Sscanf(ifVersion, "%d", &v)
 		if v >= assignment.Version {
 			w.WriteHeader(http.StatusNotModified)
 			return
@@ -207,7 +207,7 @@ func (s *Server) handleGetWASM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/wasm")
-	w.Write(data)
+	_, _ = w.Write(data)
 }
 
 // --- Admin endpoints ---
@@ -365,5 +365,5 @@ func (s *Server) handleAdminRollout(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }

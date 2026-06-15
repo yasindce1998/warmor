@@ -63,7 +63,7 @@ func (c *Client) Register(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("register: %w", err)
 	}
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -108,7 +108,7 @@ func (c *Client) poll(ctx context.Context) {
 		return
 	}
 	if resp.StatusCode != http.StatusOK {
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return
 	}
 
@@ -178,7 +178,7 @@ func (c *Client) SendHeartbeat(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("heartbeat: %w", err)
 	}
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	return nil
 }
@@ -193,7 +193,7 @@ func (c *Client) HeartbeatLoop(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.SendHeartbeat(ctx)
+			_ = c.SendHeartbeat(ctx)
 		}
 	}
 }

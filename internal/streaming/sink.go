@@ -201,7 +201,7 @@ func (s *WebhookSink) Flush(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("webhook post: %w", err)
 	}
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 
 	if resp.StatusCode >= 400 {

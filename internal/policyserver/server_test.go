@@ -67,7 +67,7 @@ func TestPolicyCRUD(t *testing.T) {
 	// Create a temp WASM file
 	dir := t.TempDir()
 	wasmPath := filepath.Join(dir, "test.wasm")
-	os.WriteFile(wasmPath, []byte("fake-wasm-binary"), 0644)
+	_ = os.WriteFile(wasmPath, []byte("fake-wasm-binary"), 0644)
 
 	// Create policy
 	p := Policy{
@@ -93,7 +93,7 @@ func TestPolicyCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 	var policies []*Policy
-	json.NewDecoder(resp.Body).Decode(&policies)
+	_ = json.NewDecoder(resp.Body).Decode(&policies)
 	resp.Body.Close()
 	if len(policies) != 1 {
 		t.Fatalf("expected 1 policy, got %d", len(policies))
@@ -111,7 +111,7 @@ func TestPolicyCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got Policy
-	json.NewDecoder(resp.Body).Decode(&got)
+	_ = json.NewDecoder(resp.Body).Decode(&got)
 	resp.Body.Close()
 	if got.ID != "default-deny" {
 		t.Errorf("expected id=default-deny, got %s", got.ID)
@@ -143,10 +143,10 @@ func TestPolicyMatching(t *testing.T) {
 	// Create WASM file
 	dir := t.TempDir()
 	wasmPath := filepath.Join(dir, "policy.wasm")
-	os.WriteFile(wasmPath, []byte("wasm-bytes"), 0644)
+	_ = os.WriteFile(wasmPath, []byte("wasm-bytes"), 0644)
 
 	// Create a policy targeting env=prod
-	srv.store.CreatePolicy(&Policy{
+	_ = srv.store.CreatePolicy(&Policy{
 		ID:       "prod-policy",
 		Name:     "Prod Policy",
 		Selector: map[string]string{"env": "prod"},
@@ -159,7 +159,7 @@ func TestPolicyMatching(t *testing.T) {
 		Hostname: "prod-node",
 		Labels:   map[string]string{"env": "prod", "tier": "web"},
 	})
-	http.Post(ts.URL+"/api/v1/register", "application/json", bytes.NewReader(body))
+	_, _ = http.Post(ts.URL+"/api/v1/register", "application/json", bytes.NewReader(body))
 
 	// Get policy for agent
 	resp, err := http.Get(ts.URL + "/api/v1/policy?agent_id=agent-prod")
@@ -167,7 +167,7 @@ func TestPolicyMatching(t *testing.T) {
 		t.Fatal(err)
 	}
 	var assignment PolicyAssignment
-	json.NewDecoder(resp.Body).Decode(&assignment)
+	_ = json.NewDecoder(resp.Body).Decode(&assignment)
 	resp.Body.Close()
 
 	if assignment.PolicyID != "prod-policy" {
@@ -193,7 +193,7 @@ func TestPolicyMatching(t *testing.T) {
 		Hostname: "dev-node",
 		Labels:   map[string]string{"env": "dev"},
 	})
-	http.Post(ts.URL+"/api/v1/register", "application/json", bytes.NewReader(body))
+	_, _ = http.Post(ts.URL+"/api/v1/register", "application/json", bytes.NewReader(body))
 
 	resp, _ = http.Get(ts.URL + "/api/v1/policy?agent_id=agent-dev")
 	resp.Body.Close()
@@ -209,9 +209,9 @@ func TestWASMDownload(t *testing.T) {
 	dir := t.TempDir()
 	wasmPath := filepath.Join(dir, "test.wasm")
 	wasmContent := []byte{0x00, 0x61, 0x73, 0x6d} // WASM magic bytes
-	os.WriteFile(wasmPath, wasmContent, 0644)
+	_ = os.WriteFile(wasmPath, wasmContent, 0644)
 
-	srv.store.CreatePolicy(&Policy{
+	_ = srv.store.CreatePolicy(&Policy{
 		ID:   "my-policy",
 		Name: "Test",
 	}, wasmPath)
@@ -230,7 +230,7 @@ func TestWASMDownload(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	buf.ReadFrom(resp.Body)
+	_, _ = buf.ReadFrom(resp.Body)
 	if !bytes.Equal(buf.Bytes(), wasmContent) {
 		t.Error("wasm content mismatch")
 	}
@@ -243,8 +243,8 @@ func TestRolloutHTTPEndpoints(t *testing.T) {
 	// Create a policy first
 	dir := t.TempDir()
 	wasmPath := filepath.Join(dir, "policy.wasm")
-	os.WriteFile(wasmPath, []byte("wasm-data"), 0644)
-	srv.Store().CreatePolicy(&Policy{
+	_ = os.WriteFile(wasmPath, []byte("wasm-data"), 0644)
+	_ = srv.Store().CreatePolicy(&Policy{
 		ID:       "web-policy",
 		Name:     "Web Policy",
 		Selector: map[string]string{"tier": "web"},
@@ -273,7 +273,7 @@ func TestRolloutHTTPEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rollouts []*RolloutState
-	json.NewDecoder(resp.Body).Decode(&rollouts)
+	_ = json.NewDecoder(resp.Body).Decode(&rollouts)
 	resp.Body.Close()
 	if len(rollouts) != 1 {
 		t.Fatalf("expected 1 rollout, got %d", len(rollouts))
@@ -288,7 +288,7 @@ func TestRolloutHTTPEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	var state RolloutState
-	json.NewDecoder(resp.Body).Decode(&state)
+	_ = json.NewDecoder(resp.Body).Decode(&state)
 	resp.Body.Close()
 	if state.Percentage != 25 {
 		t.Errorf("expected percentage=25, got %d", state.Percentage)
@@ -302,7 +302,7 @@ func TestRolloutHTTPEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	json.NewDecoder(resp.Body).Decode(&state)
+	_ = json.NewDecoder(resp.Body).Decode(&state)
 	resp.Body.Close()
 	if state.Percentage != 75 {
 		t.Errorf("expected percentage=75 after update, got %d", state.Percentage)
@@ -321,7 +321,7 @@ func TestRolloutHTTPEndpoints(t *testing.T) {
 
 	// Verify aborted
 	resp, _ = http.Get(ts.URL + "/api/v1/admin/rollouts/canary-1")
-	json.NewDecoder(resp.Body).Decode(&state)
+	_ = json.NewDecoder(resp.Body).Decode(&state)
 	resp.Body.Close()
 	if state.Status != "aborted" {
 		t.Errorf("expected status=aborted, got %s", state.Status)
@@ -334,9 +334,9 @@ func TestRolloutAffectsPolicyDistribution(t *testing.T) {
 
 	dir := t.TempDir()
 	wasmPath := filepath.Join(dir, "policy.wasm")
-	os.WriteFile(wasmPath, []byte("wasm-v1"), 0644)
+	_ = os.WriteFile(wasmPath, []byte("wasm-v1"), 0644)
 
-	srv.Store().CreatePolicy(&Policy{
+	_ = srv.Store().CreatePolicy(&Policy{
 		ID:       "app-policy",
 		Name:     "App Policy",
 		Selector: map[string]string{"app": "web"},
@@ -344,18 +344,18 @@ func TestRolloutAffectsPolicyDistribution(t *testing.T) {
 	}, wasmPath)
 
 	// Update policy to v2
-	os.WriteFile(wasmPath, []byte("wasm-v2"), 0644)
-	srv.Store().UpdatePolicy("app-policy", wasmPath)
+	_ = os.WriteFile(wasmPath, []byte("wasm-v2"), 0644)
+	_ = srv.Store().UpdatePolicy("app-policy", wasmPath)
 
 	// Register agent
 	body, _ := json.Marshal(RegisterRequest{
 		ID:     "agent-1",
 		Labels: map[string]string{"app": "web"},
 	})
-	http.Post(ts.URL+"/api/v1/register", "application/json", bytes.NewReader(body))
+	_, _ = http.Post(ts.URL+"/api/v1/register", "application/json", bytes.NewReader(body))
 
 	// Create rollout at 100% targeting v2
-	srv.Rollouts().CreateRollout(RolloutConfig{
+	_, _ = srv.Rollouts().CreateRollout(RolloutConfig{
 		ID:            "full-rollout",
 		PolicyID:      "app-policy",
 		TargetVersion: 2,
@@ -368,7 +368,7 @@ func TestRolloutAffectsPolicyDistribution(t *testing.T) {
 		t.Fatal(err)
 	}
 	var assignment PolicyAssignment
-	json.NewDecoder(resp.Body).Decode(&assignment)
+	_ = json.NewDecoder(resp.Body).Decode(&assignment)
 	resp.Body.Close()
 
 	if assignment.Version != 2 {

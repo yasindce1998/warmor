@@ -14,9 +14,9 @@ func setupRolloutTest(t *testing.T) (*Store, *RolloutManager, string) {
 
 	dir := t.TempDir()
 	wasmPath := filepath.Join(dir, "policy.wasm")
-	os.WriteFile(wasmPath, []byte("test-wasm"), 0644)
+	_ = os.WriteFile(wasmPath, []byte("test-wasm"), 0644)
 
-	store.CreatePolicy(&Policy{
+	_ = store.CreatePolicy(&Policy{
 		ID:       "web-policy",
 		Name:     "Web Policy",
 		Selector: map[string]string{"tier": "web"},
@@ -49,7 +49,7 @@ func TestRolloutCreation(t *testing.T) {
 func TestRolloutPercentageUpdate(t *testing.T) {
 	_, rm, _ := setupRolloutTest(t)
 
-	rm.CreateRollout(RolloutConfig{
+	_, _ = rm.CreateRollout(RolloutConfig{
 		ID:            "rollout-1",
 		PolicyID:      "web-policy",
 		TargetVersion: 2,
@@ -81,7 +81,7 @@ func TestRolloutPercentageUpdate(t *testing.T) {
 func TestRolloutAbort(t *testing.T) {
 	_, rm, _ := setupRolloutTest(t)
 
-	rm.CreateRollout(RolloutConfig{
+	_, _ = rm.CreateRollout(RolloutConfig{
 		ID:            "rollout-1",
 		PolicyID:      "web-policy",
 		TargetVersion: 2,
@@ -101,7 +101,7 @@ func TestRolloutAbort(t *testing.T) {
 func TestConsistentBucketing(t *testing.T) {
 	_, rm, _ := setupRolloutTest(t)
 
-	rm.CreateRollout(RolloutConfig{
+	_, _ = rm.CreateRollout(RolloutConfig{
 		ID:            "rollout-1",
 		PolicyID:      "web-policy",
 		TargetVersion: 2,
@@ -110,7 +110,7 @@ func TestConsistentBucketing(t *testing.T) {
 
 	// Same agent should always get the same decision
 	first := rm.ShouldUseNewVersion("rollout-1", "agent-xyz")
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if rm.ShouldUseNewVersion("rollout-1", "agent-xyz") != first {
 			t.Fatal("inconsistent bucketing for same agent")
 		}
@@ -120,7 +120,7 @@ func TestConsistentBucketing(t *testing.T) {
 func TestRolloutDistribution(t *testing.T) {
 	_, rm, _ := setupRolloutTest(t)
 
-	rm.CreateRollout(RolloutConfig{
+	_, _ = rm.CreateRollout(RolloutConfig{
 		ID:            "rollout-dist",
 		PolicyID:      "web-policy",
 		TargetVersion: 2,
@@ -130,7 +130,7 @@ func TestRolloutDistribution(t *testing.T) {
 	// With 1000 agents and 50% rollout, distribution should be roughly even
 	newCount := 0
 	total := 1000
-	for i := 0; i < total; i++ {
+	for i := range total {
 		agentID := fmt.Sprintf("agent-%d", i)
 		if rm.ShouldUseNewVersion("rollout-dist", agentID) {
 			newCount++
@@ -147,9 +147,9 @@ func TestResolvePolicyWithRollout(t *testing.T) {
 	store, rm, wasmPath := setupRolloutTest(t)
 
 	// Update policy to version 2
-	store.UpdatePolicy("web-policy", wasmPath)
+	_ = store.UpdatePolicy("web-policy", wasmPath)
 
-	rm.CreateRollout(RolloutConfig{
+	_, _ = rm.CreateRollout(RolloutConfig{
 		ID:            "canary-1",
 		PolicyID:      "web-policy",
 		TargetVersion: 2,

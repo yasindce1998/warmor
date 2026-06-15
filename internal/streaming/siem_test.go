@@ -202,7 +202,7 @@ func TestSyslogSink_Integration(t *testing.T) {
 	}
 
 	buf := make([]byte, 4096)
-	pc.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = pc.SetReadDeadline(time.Now().Add(2 * time.Second))
 	n, _, err := pc.ReadFrom(buf)
 	if err != nil {
 		t.Fatal(err)

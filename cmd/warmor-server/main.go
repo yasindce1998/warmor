@@ -31,7 +31,7 @@ func main() {
 	go func() {
 		<-sigChan
 		log.Println("shutting down policy server...")
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 		cancel()
 	}()
 

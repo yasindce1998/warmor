@@ -53,7 +53,7 @@ func TestSandboxApplyUnknownProfile(t *testing.T) {
 
 func TestSandboxRelease(t *testing.T) {
 	sm := NewSandboxManager(DefaultProfiles()...)
-	sm.ApplySandbox(1234, "strict")
+	_ = sm.ApplySandbox(1234, "strict")
 	sm.ReleaseSandbox(1234)
 
 	_, ok := sm.IsSandboxed(1234)
@@ -64,7 +64,7 @@ func TestSandboxRelease(t *testing.T) {
 
 func TestSandboxViolationNetwork(t *testing.T) {
 	sm := NewSandboxManager(DefaultProfiles()...)
-	sm.ApplySandbox(1234, "network-deny")
+	_ = sm.ApplySandbox(1234, "network-deny")
 
 	reason := sm.CheckViolation(1234, "network")
 	if reason == "" {
@@ -79,7 +79,7 @@ func TestSandboxViolationNetwork(t *testing.T) {
 
 func TestSandboxViolationReadOnly(t *testing.T) {
 	sm := NewSandboxManager(DefaultProfiles()...)
-	sm.ApplySandbox(1234, "readonly")
+	_ = sm.ApplySandbox(1234, "readonly")
 
 	reason := sm.CheckViolation(1234, "write")
 	if reason == "" {
@@ -94,7 +94,7 @@ func TestSandboxViolationReadOnly(t *testing.T) {
 
 func TestSandboxViolationBlockedSyscall(t *testing.T) {
 	sm := NewSandboxManager(DefaultProfiles()...)
-	sm.ApplySandbox(1234, "limited")
+	_ = sm.ApplySandbox(1234, "limited")
 
 	reason := sm.CheckViolation(1234, "ptrace")
 	if reason == "" {
