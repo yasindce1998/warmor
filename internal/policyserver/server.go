@@ -2,6 +2,7 @@ package policyserver
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -17,12 +18,16 @@ type Server struct {
 	httpServer *http.Server
 	addr       string
 	staleCheck time.Duration
+	tlsConfig  *tls.Config
+	jwtSecret  []byte
 }
 
 // ServerConfig configures the policy management server.
 type ServerConfig struct {
 	Addr           string
 	StaleThreshold time.Duration
+	TLSConfig      *tls.Config
+	JWTSecret      []byte
 }
 
 // NewServer creates a policy management server.
@@ -40,6 +45,8 @@ func NewServer(cfg ServerConfig) *Server {
 		rollouts:   NewRolloutManager(store),
 		addr:       cfg.Addr,
 		staleCheck: cfg.StaleThreshold,
+		tlsConfig:  cfg.TLSConfig,
+		jwtSecret:  cfg.JWTSecret,
 	}
 
 	mux := http.NewServeMux()
@@ -50,12 +57,16 @@ func NewServer(cfg ServerConfig) *Server {
 	mux.HandleFunc("/api/v1/policy", s.handleGetPolicy)
 	mux.HandleFunc("/api/v1/policy/wasm", s.handleGetWASM)
 
-	// Admin endpoints
-	mux.HandleFunc("/api/v1/admin/policies", s.handleAdminPolicies)
-	mux.HandleFunc("/api/v1/admin/policies/", s.handleAdminPolicy)
-	mux.HandleFunc("/api/v1/admin/agents", s.handleAdminAgents)
-	mux.HandleFunc("/api/v1/admin/rollouts", s.handleAdminRollouts)
-	mux.HandleFunc("/api/v1/admin/rollouts/", s.handleAdminRollout)
+	// Container runtime endpoints
+	mux.HandleFunc("/api/v1/containers/bind", s.handleContainerBind)
+	mux.HandleFunc("/api/v1/containers/", s.handleContainerDelete)
+
+	// Admin endpoints (JWT-protected when secret is configured)
+	mux.HandleFunc("/api/v1/admin/policies", s.requireJWT(s.handleAdminPolicies))
+	mux.HandleFunc("/api/v1/admin/policies/", s.requireJWT(s.handleAdminPolicy))
+	mux.HandleFunc("/api/v1/admin/agents", s.requireJWT(s.handleAdminAgents))
+	mux.HandleFunc("/api/v1/admin/rollouts", s.requireJWT(s.handleAdminRollouts))
+	mux.HandleFunc("/api/v1/admin/rollouts/", s.requireJWT(s.handleAdminRollout))
 
 	s.httpServer = &http.Server{
 		Addr:         cfg.Addr,
@@ -81,9 +92,17 @@ func (s *Server) Rollouts() *RolloutManager {
 // Start begins listening and serving. Blocks until shutdown.
 func (s *Server) Start() error {
 	go s.staleLoop()
-	log.Printf("policy server listening on %s", s.addr)
-	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return err
+	if s.tlsConfig != nil {
+		s.httpServer.TLSConfig = s.tlsConfig
+		log.Printf("policy server listening on %s (mTLS)", s.addr)
+		if err := s.httpServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+			return err
+		}
+	} else {
+		log.Printf("policy server listening on %s", s.addr)
+		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return err
+		}
 	}
 	return nil
 }
@@ -359,6 +378,36 @@ func (s *Server) handleAdminRollout(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) requireJWT(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if len(s.jwtSecret) == 0 {
+			next(w, r)
+			return
+		}
+
+		auth := r.Header.Get("Authorization")
+		if !strings.HasPrefix(auth, "Bearer ") {
+			http.Error(w, "missing authorization", http.StatusUnauthorized)
+			return
+		}
+
+		token := strings.TrimPrefix(auth, "Bearer ")
+		issuer := newJWTIssuerFromSecret(s.jwtSecret)
+		claims, err := issuer.Validate(token)
+		if err != nil {
+			http.Error(w, "invalid token: "+err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		if claims.Role != "admin" {
+			http.Error(w, "admin role required", http.StatusForbidden)
+			return
+		}
+
+		next(w, r)
 	}
 }
 

@@ -1,0 +1,65 @@
+groups:
+  - name: warmor
+    rules:
+      - alert: WarmorHighDenyRate
+        expr: sum(rate(warmor_lsm_decisions_total{action="deny"}[5m])) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High deny rate detected"
+          description: "Warmor is denying more than 10 operations per second for 2 minutes."
+
+      - alert: WarmorHookLatencyHigh
+        expr: histogram_quantile(0.99, sum(rate(warmor_lsm_decision_duration_seconds_bucket[5m])) by (hook, le)) > 0.001
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LSM hook latency too high"
+          description: "Hook {{ $labels.hook }} p99 latency exceeds 1ms for 5 minutes."
+
+      - alert: WarmorEventsDropped
+        expr: rate(warmor_events_dropped_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Events being dropped"
+          description: "Warmor is dropping events due to backpressure. Ring buffer may be too small."
+
+      - alert: WarmorPolicyLoadFailure
+        expr: sum(rate(warmor_policy_loads_total{status="error"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Policy load failures"
+          description: "Policy {{ $labels.policy_id }} is failing to load."
+
+      - alert: WarmorWASMErrors
+        expr: sum(rate(warmor_wasm_exec_errors_total[5m])) by (policy_id) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WASM execution errors"
+          description: "Policy {{ $labels.policy_id }} is producing WASM execution errors."
+
+      - alert: WarmorAgentStale
+        expr: time() - warmor_agent_last_heartbeat_timestamp > 120
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent missed heartbeat"
+          description: "Agent has not sent a heartbeat in over 2 minutes."
+
+      - alert: WarmorNoAgentsRegistered
+        expr: warmor_agent_registrations_total == 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "No agents registered"
+          description: "No agents have registered with the policy server in 10 minutes."

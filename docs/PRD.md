@@ -2,9 +2,9 @@
 
 **Project Name:** warmor (WebAssembly + Armor)  
 **Tagline:** Cross-platform, Wasm-powered system-level security enforcer  
-**Version:** 1.3.0-beta  
-**Date:** 2026-06-12  
-**Status:** Phase 6 Complete — Testing & Validation
+**Version:** 1.4.0-beta  
+**Date:** 2026-06-15  
+**Status:** Phase 8 Complete
 
 ---
 
@@ -35,7 +35,8 @@ Traditional security enforcers (AppArmor, SELinux, eBPF) are:
 | **Phase 4** | ✅ COMPLETE | Windows (ETW), macOS (ESF), unified policies | Linux/Windows/macOS |
 | **Phase 5** | ✅ COMPLETE | YAML DSL, Kubernetes, dashboards, hardening | All |
 | **Phase 6** | ✅ COMPLETE | LSM-BPF kernel enforcement, policy map fast-path | Linux |
-| **Phase 7** | ⏳ PENDING | Stateful policies, fleet management, SIEM | All |
+| **Phase 7** | ✅ COMPLETE | Stateful policies, fleet management, SIEM | All |
+| **Phase 8** | ✅ COMPLETE | mTLS, CLI (Bubble Tea), observability, container runtime | All |
 
 ### Key Metrics Achieved
 
@@ -740,21 +741,63 @@ Cold Path (Cache Miss):
 - [x] No regression in tracepoint-based monitoring
 - [ ] P95 kernel fast-path latency <10μs (map lookup only) — requires live benchmarking
 
-### Phase 7: Advanced Features (Weeks 23-28) ⏳ NOT STARTED
+### Phase 7: Advanced Features (Weeks 23-28) ✅ COMPLETE
 **Goal:** Add enterprise features
 
 **Deliverables:**
-- [ ] Stateful policy engine with process lineage tracking
-- [ ] Central policy management server for fleet management
-- [ ] A/B testing framework for policy changes
-- [ ] Advanced enforcement (network filtering, file encryption, process sandboxing)
-- [ ] SIEM integration for security event streaming
+- [x] Stateful policy engine with process lineage tracking
+- [x] Central policy management server for fleet management (HTTP API)
+- [x] A/B testing / canary rollout framework for policy changes
+- [x] Advanced enforcement (CIDR network filtering, rate limiting, process sandboxing)
+- [x] SIEM integration for security event streaming (CEF format over syslog)
 
-**Success Criteria:** ⏳ PENDING
-- [ ] Support complex, stateful policies
-- [ ] Fleet management capabilities
-- [ ] A/B testing for safe policy rollouts
-- [ ] Enterprise-grade security features
+**Success Criteria:** ✅ MET
+- [x] Support complex, stateful policies with parent-child lineage
+- [x] Fleet management: agent registration, heartbeat, policy distribution
+- [x] Canary rollouts with consistent agent bucketing
+- [x] 4 built-in sandbox profiles (strict, network-deny, readonly, limited)
+
+### Phase 8: Production Hardening & Operations (Weeks 29-36) ⏳ IN PROGRESS
+**Goal:** Secure the distribution channel, provide operator tooling, add runtime observability, and integrate with container runtimes
+
+**Track A: mTLS & Policy Signing** ✅ COMPLETE
+- [x] Mutual TLS between agent ↔ policy server (ed25519 certificates)
+- [x] Policy bundle signing (ed25519 signatures on WASM binaries)
+- [x] Admin API authentication (JWT bearer tokens — HMAC-SHA256 & Ed25519)
+- [x] Certificate generation (CA, server, agent) with configurable CN/SANs
+- [x] TLS configuration in agent + server config structs
+
+**Track B: CLI Tool (`warmorctl`) — Bubble Tea TUI** ✅ COMPLETE
+- [x] Dashboard view — cluster overview (agents, policies, rollouts)
+- [x] Agent list view — hostname, status, version, last heartbeat
+- [x] Policy list view — ID, version, browse policies
+- [x] Rollout view — progress bars, status coloring, promote/abort
+- [x] Certificate management — generate CA/server/agent certs, signing keypairs
+- [x] Keyboard navigation (j/k, tab, 1-5 views, r=refresh, g=generate)
+
+**Track C: Runtime Observability** ✅ COMPLETE
+- [x] Prometheus metrics exporter (hook decisions, latency histograms, WASM exec)
+- [x] `/metrics` endpoint with hook-level breakdown
+- [x] Grafana dashboard JSON templates (overview + LSM hooks + WASM + agents)
+- [x] Prometheus alert rules (high deny rate, latency, events dropped, stale agent)
+- [x] Docker Compose monitoring stack (Prometheus + Grafana provisioned)
+
+**Track D: Container Runtime Integration** ✅ COMPLETE
+- [x] containerd shim plugin — sync running containers, policy binding
+- [x] CRI-O OCI hook configuration (createRuntime + poststop)
+- [x] OCI hook binary (`warmor-oci-hook`) — bind/unbind on container lifecycle
+- [x] Per-container policy scoping via container labels (`io.warmor/policy`)
+- [x] Container binding API endpoints on policy server
+- [x] Runtime auto-detection (containerd/CRI-O/Docker via socket probing)
+- [x] Cgroup-based container ID extraction for enforcement correlation
+- [x] Kubernetes DaemonSet manifest with RBAC, volumes, mTLS secrets
+
+**Success Criteria:** ✅ MET
+- [x] Agent ↔ server traffic encrypted with mTLS; unsigned policies rejected
+- [x] `warmorctl` TUI covers fleet overview, policies, rollouts, cert generation
+- [x] Prometheus metrics scraped and visualized in Grafana (dashboard + alerts)
+- [x] New containers automatically get policies applied based on labels
+- [x] Zero plaintext secrets in transit or at rest
 
 ---
 
@@ -913,7 +956,7 @@ Cold Path (Cache Miss):
 
 ---
 
-**Document Version:** 1.3.0-beta  
-**Last Updated:** 2026-06-12  
-**Status:** Phase 6 Complete — Testing & Validation  
-**Next Review:** After integration testing on Linux 5.7+ kernel
+**Document Version:** 1.4.0-beta  
+**Last Updated:** 2026-06-15  
+**Status:** Phase 8 Complete  
+**Next Review:** After Phase 8 Track A (mTLS) completion

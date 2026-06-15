@@ -3,6 +3,7 @@ package policyserver
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,18 +30,26 @@ type ClientConfig struct {
 	AgentID   string
 	Hostname  string
 	Labels    map[string]string
+	TLSConfig *tls.Config
 	OnUpdate  func(assignment *PolicyAssignment, wasmData []byte)
 }
 
 // NewClient creates a policy server client.
 func NewClient(cfg ClientConfig) *Client {
+	transport := &http.Transport{}
+	if cfg.TLSConfig != nil {
+		transport.TLSClientConfig = cfg.TLSConfig
+	}
 	return &Client{
-		baseURL:    cfg.ServerURL,
-		agentID:    cfg.AgentID,
-		hostname:   cfg.Hostname,
-		labels:     cfg.Labels,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		onUpdate:   cfg.OnUpdate,
+		baseURL:  cfg.ServerURL,
+		agentID:  cfg.AgentID,
+		hostname: cfg.Hostname,
+		labels:   cfg.Labels,
+		httpClient: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: transport,
+		},
+		onUpdate: cfg.OnUpdate,
 	}
 }
 

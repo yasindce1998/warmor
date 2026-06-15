@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: warmor-agent
+  namespace: warmor-system
+  labels:
+    app: warmor
+    component: agent
+spec:
+  selector:
+    matchLabels:
+      app: warmor
+      component: agent
+  template:
+    metadata:
+      labels:
+        app: warmor
+        component: agent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      hostPID: true
+      hostNetwork: true
+      serviceAccountName: warmor-agent
+      containers:
+        - name: warmor-agent
+          image: ghcr.io/yasindce1998/warmor:latest
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+                - BPF
+                - PERFMON
+          volumeMounts:
+            - name: sys-kernel
+              mountPath: /sys/kernel
+              readOnly: true
+            - name: bpf-maps
+              mountPath: /sys/fs/bpf
+            - name: containerd-sock
+              mountPath: /run/containerd/containerd.sock
+            - name: certs
+              mountPath: /etc/warmor/certs
+              readOnly: true
+          env:
+            - name: WARMOR_SERVER
+              value: "https://warmor-server.warmor-system.svc:8443"
+            - name: WARMOR_METRICS_ADDR
+              value: ":9090"
+            - name: WARMOR_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - containerPort: 9090
+              name: metrics
+              protocol: TCP
+      volumes:
+        - name: sys-kernel
+          hostPath:
+            path: /sys/kernel
+        - name: bpf-maps
+          hostPath:
+            path: /sys/fs/bpf
+        - name: containerd-sock
+          hostPath:
+            path: /run/containerd/containerd.sock
+            type: Socket
+        - name: certs
+          secret:
+            secretName: warmor-agent-certs
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: warmor-agent
+  namespace: warmor-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: warmor-agent
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: warmor-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: warmor-agent
+subjects:
+  - kind: ServiceAccount
+    name: warmor-agent
+    namespace: warmor-system
