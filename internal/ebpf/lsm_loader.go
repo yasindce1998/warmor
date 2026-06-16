@@ -20,13 +20,13 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event -type policy_key -type policy_value lsm_exec ../../bpf/lsm_exec.bpf.c -- -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event lsm_file ../../bpf/lsm_file.bpf.c -- -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_connect ../../bpf/lsm_connect.bpf.c -- -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_bind ../../bpf/lsm_bind.bpf.c -- -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_listen ../../bpf/lsm_listen.bpf.c -- -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_ptrace ../../bpf/lsm_ptrace.bpf.c -- -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_mount ../../bpf/lsm_mount.bpf.c -- -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event -type policy_key -type policy_value lsm_exec ../../bpf/lsm_exec.bpf.c -- -I../../bpf -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event lsm_file ../../bpf/lsm_file.bpf.c -- -I../../bpf -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_connect ../../bpf/lsm_connect.bpf.c -- -I../../bpf -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_bind ../../bpf/lsm_bind.bpf.c -- -I../../bpf -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_listen ../../bpf/lsm_listen.bpf.c -- -I../../bpf -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_ptrace ../../bpf/lsm_ptrace.bpf.c -- -I../../bpf -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_mount ../../bpf/lsm_mount.bpf.c -- -I../../bpf -I/usr/include/bpf
 
 // LSMEvent matches struct lsm_event in warmor_lsm.h
 type LSMEvent struct {
