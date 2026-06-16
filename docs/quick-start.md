@@ -139,21 +139,154 @@ helm upgrade warmor deploy/helm/warmor \
 sudo warmor-daemon --policy policy.yaml --lsm-enforce
 ```
 
+---
+
+## warmorctl CLI
+
+`warmorctl` is a terminal UI for managing warmor fleets, policies, and certificates.
+
+### Install
+
+```bash
+go install github.com/yasindce1998/warmor/cmd/warmorctl@latest
+```
+
+### Usage
+
+```bash
+# Launch interactive TUI dashboard
+warmorctl
+
+# Connect to a specific server
+warmorctl --server https://warmor-server:8443 --cert agent.crt --key agent.key
+```
+
+The TUI provides tabs for:
+- **Dashboard** — Real-time event stream and summary stats
+- **Agents** — Connected agents, heartbeat status, assigned policies
+- **Policies** — List/create/update/delete policies
+- **Rollouts** — A/B testing rollout management
+- **Certs** — Generate mTLS certificates for agents
+
+### Generate Certificates
+
+```bash
+# Generate CA + server + agent certificates
+warmorctl certs generate --ca --out ./certs/
+warmorctl certs generate --server --ca-cert ./certs/ca.crt --ca-key ./certs/ca.key --out ./certs/
+warmorctl certs generate --agent --ca-cert ./certs/ca.crt --ca-key ./certs/ca.key --name agent-01 --out ./certs/
+```
+
+---
+
+## mTLS Setup
+
+Enable mutual TLS between agents and the policy server:
+
+```bash
+# Start server with mTLS
+warmor-server \
+  --listen :8443 \
+  --tls-cert ./certs/server.crt \
+  --tls-key ./certs/server.key \
+  --tls-ca ./certs/ca.crt \
+  --policy-dir ./policies
+
+# Start agent with mTLS
+warmor-daemon \
+  --policy policy.yaml \
+  --server https://warmor-server:8443 \
+  --tls-cert ./certs/agent-01.crt \
+  --tls-key ./certs/agent-01.key \
+  --tls-ca ./certs/ca.crt
+```
+
+---
+
+## Monitoring Stack
+
+Deploy Prometheus + Grafana alongside warmor for full observability:
+
+```bash
+cd deploy/
+docker compose -f docker-compose.monitoring.yml up -d
+```
+
+This starts:
+- **Prometheus** on `http://localhost:9091` — scrapes warmor metrics
+- **Grafana** on `http://localhost:3000` — pre-provisioned dashboard (login: admin/warmor)
+
+The Grafana dashboard shows:
+- LSM hook decisions (allow/deny/audit) by type
+- Decision latency histogram (P50/P95/P99)
+- Policy load success/failure rates
+- Agent heartbeat status
+
+Alert rules fire on:
+- Deny rate exceeding threshold (possible attack)
+- Agent heartbeat missing > 5 minutes
+- Policy load failures
+
+---
+
+## Container Runtime Integration
+
+### containerd
+
+Warmor integrates as a containerd shim plugin to receive container lifecycle events and scope policies per-container:
+
+```bash
+warmor-daemon \
+  --policy policy.yaml \
+  --containerd-socket /run/containerd/containerd.sock \
+  --per-container-policy
+```
+
+### CRI-O (OCI Hooks)
+
+Install the OCI hook configuration:
+
+```bash
+sudo cp deploy/crio/warmor-hook.json /etc/containers/oci/hooks.d/
+```
+
+### Kubernetes DaemonSet
+
+The Helm chart deploys warmor with container runtime integration automatically:
+
+```bash
+helm install warmor deploy/helm/warmor \
+  --namespace warmor-system --create-namespace \
+  --set daemon.containerRuntime=containerd \
+  --set daemon.perContainerPolicy=true
+```
+
+---
+
 ## What's Next
 
 | Goal | Guide |
 |------|-------|
 | Write custom policies | [Policy Authoring](policy-authoring.md) |
+| Manage fleet with warmorctl | Run `warmorctl` for interactive TUI |
+| Set up mTLS | See [mTLS Setup](#mtls-setup) above |
+| Monitor with Grafana | `docker compose -f deploy/docker-compose.monitoring.yml up` |
 | Enable alerting | Set `alerting.enabled=true` — see [values.yaml](../deploy/helm/warmor/values.yaml) |
-| Monitor with Grafana | Set `grafana.dashboardEnabled=true` and `serviceMonitor.enabled=true` |
-| Restrict to specific containers | Use `daemon.cgroupFilter` to scope enforcement |
+| Restrict to specific containers | Use `daemon.cgroupFilter` or `--per-container-policy` |
 | Deploy per-namespace policies | Install the WarmorPolicy CRD — see [CRD guide](crd-usage.md) |
+| Advanced features (Phase 7) | [Phase 7 Guide](phase7-advanced-features.md) |
 
 ## Common Operations
 
 ```bash
 # Check what warmor is seeing (top denied events)
 kubectl -n warmor-system logs -l app.kubernetes.io/name=warmor | grep DENY
+
+# View real-time dashboard
+warmorctl
+
+# List connected agents
+warmorctl agents list
 
 # Temporarily disable enforcement on a node
 kubectl -n warmor-system delete pod <pod-name>  # respawns in audit mode if set

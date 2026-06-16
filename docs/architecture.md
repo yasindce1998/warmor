@@ -1,8 +1,8 @@
 # warmor Architecture
 
-**Version:** 1.4.0-beta  
-**Last Updated:** 2026-06-15  
-**Status:** Phase 7 Complete — Advanced Enforcement & SIEM
+**Version:** 1.5.0-beta  
+**Last Updated:** 2026-06-16  
+**Status:** Phase 8 Complete — mTLS, CLI, Container Runtime, Observability
 
 ---
 
@@ -462,9 +462,14 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 ### LSM Kernel Fast-Path (Linux only)
 
 ```
-1. LSM hook fires (bprm_check_security / file_open / socket_connect)
+1. LSM hook fires (7 hooks):
+   - bprm_check_security (exec)
+   - file_open
+   - socket_connect / socket_bind / socket_listen
+   - ptrace_access_check
+   - sb_mount
    ↓
-2. Compute FNV-1a hash of filename/pattern
+2. Compute FNV-1a hash of subject (filename, endpoint, port, comm, fstype)
    ↓
 3. Lookup policy_map[{cgroup_id, hash, event_type}]
    ├─ HIT + action=DENY → return -EPERM (blocked, emit audit event)
@@ -609,16 +614,47 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 
 **Install:** `helm install warmor deploy/helm/warmor/`
 
-### Distributed Mode (Future)
+### Distributed Mode with mTLS
 
 ```
-┌─────────────────┐     ┌─────────────────┐
-│  warmor-daemon  │────▶│  Central SIEM   │
-│  + policy.wasm  │     │   + Analytics   │
-└─────────────────┘     └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    warmor-server (Policy Hub)                │
+│  ┌──────────┐  ┌──────────────┐  ┌───────────────────────┐ │
+│  │  REST    │  │ Policy Store │  │  A/B Testing Engine   │ │
+│  │  API     │  │ (YAML+WASM)  │  │  (consistent hash)    │ │
+│  └──────────┘  └──────────────┘  └───────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │          mTLS + JWT Auth (Ed25519/HMAC-SHA256)       │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+          ▲  mTLS           ▲  mTLS           ▲  mTLS
+          │                 │                 │
+┌─────────────────┐ ┌──────────────┐ ┌──────────────────────┐
+│  warmor-daemon  │ │ warmor-daemon│ │  warmor-daemon       │
+│  (Agent A)      │ │ (Agent B)    │ │  (Agent C)           │
+│  + containerd   │ │ + CRI-O      │ │  + per-container     │
+│    integration  │ │   OCI hooks  │ │    policy scope      │
+└─────────────────┘ └──────────────┘ └──────────────────────┘
 ```
 
-**Use Case:** Fleet management, centralized logging
+**Use Case:** Fleet management, per-container enforcement, centralized policy distribution
+
+### Monitoring Stack
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│   warmor-daemon ──(metrics:9090)──▶ Prometheus ──▶ Grafana  │
+│                                                              │
+│   Alert Rules:                                               │
+│   - warmor_lsm_deny_rate > 100/min → PagerDuty             │
+│   - warmor_agent_last_heartbeat > 5m → Slack                │
+│   - warmor_policy_load_failures > 0 → Critical             │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Use Case:** Real-time security posture visibility, automated alerting
 
 ---
 
@@ -635,28 +671,60 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 - **Windows:** ETW, eBPF-for-Windows
 - **macOS:** Endpoint Security Framework
 
+### Security & Auth
+- **Ed25519** - Certificate generation, policy signing, JWT (EdDSA)
+- **mTLS** - Mutual TLS for agent↔server communication
+- **HMAC-SHA256** - JWT token signing (shared-secret mode)
+
+### CLI & UX
+- **Bubble Tea** - Terminal UI framework (warmorctl)
+- **Lipgloss** - TUI styling and layout
+
+### Container Runtime
+- **containerd** - Shim plugin for container lifecycle events
+- **CRI-O** - OCI hook integration
+- **Kubernetes** - DaemonSet with BPF capabilities
+
 ### Observability
-- **Prometheus** - Metrics collection
+- **Prometheus** - Metrics collection (LSM decisions, latency, policy loads)
+- **Grafana** - Pre-built dashboards with auto-provisioning
+- **Alert Rules** - Deny rate spikes, heartbeat failures, load errors
 - **zerolog** - Structured logging
 - **pprof** - Performance profiling
 
 ---
 
-## Future Enhancements
+## Development Phases (Complete)
 
-### Phase 6: LSM-BPF Kernel Enforcement ✅ (In Progress)
-- Synchronous kernel-level blocking via LSM-BPF hooks
+### Phase 6: LSM-BPF Kernel Enforcement ✅
+- Synchronous kernel-level blocking via LSM-BPF hooks (exec, file_open, socket_connect, socket_bind, socket_listen, ptrace_access_check, sb_mount)
 - BPF hash map policy cache with WASM→BPF feedback loop
 - Cgroup-aware two-tier policy lookup (per-container + global)
 - FNV-1a hashing for O(1) pattern matching in BPF context
 - Audit-only mode via `lsm_enforce` toggle
 - Graceful fallback to tracepoint-only on unsupported kernels
 
-### Phase 7: Advanced Features ⏳ (Planned)
+### Phase 7: Advanced Features ✅
 - Stateful policy engine with process lineage tracking
-- Central policy management server for fleet management
-- A/B testing framework for policy changes
-- SIEM integration for security event streaming
+- Central policy management server (`warmor-server`) for fleet management
+- A/B testing framework for safe canary policy rollouts
+- Advanced enforcement (network filtering, process sandboxing)
+- SIEM integration (CEF-formatted event streaming to syslog)
+
+### Phase 8: Production Infrastructure ✅
+- **mTLS & Policy Signing** — Ed25519 certificates, mutual TLS for agent↔server, signed WASM bundles, JWT auth (HMAC-SHA256 + EdDSA)
+- **warmorctl CLI** — Bubble Tea TUI with real-time dashboard, agent management, policy CRUD, rollout control, certificate generation
+- **Container Runtime Integration** — containerd shim plugin, CRI-O OCI hooks, per-container policy scoping, Kubernetes DaemonSet
+- **Enhanced Observability** — Prometheus metrics exporter (LSM decisions, latency histograms, policy loads), Grafana dashboards, alerting rules (deny spikes, heartbeat failures, load errors)
+
+## Future Enhancements
+
+### Phase 9 (Planned)
+- eBPF-for-Windows enforcement mode
+- Network policy (L3/L4 filtering via XDP)
+- Distributed tracing (OpenTelemetry spans per event)
+- Policy marketplace with community-contributed rules
+- GUI web console for fleet management
 
 ---
 
@@ -665,9 +733,14 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 ### Documentation
 - [Product Requirements](PRD.md)
 - [Project Overview](OVERVIEW.md)
+- [Quick Start](quick-start.md)
+- [Phase 7: Advanced Features](phase7-advanced-features.md)
+- [Phase 8: Production Infrastructure](phase8-production-infrastructure.md)
 - [Linux Platform Guide](PLATFORM_LINUX.md)
 - [Windows Platform Guide](PLATFORM_WINDOWS.md)
 - [macOS Platform Guide](PLATFORM_MACOS.md)
+- [Security Posture](SECURITY_POSTURE.md)
+- [BPF Compatibility](BPF_COMPATIBILITY.md)
 
 ### External Resources
 - [eBPF Documentation](https://ebpf.io/)
