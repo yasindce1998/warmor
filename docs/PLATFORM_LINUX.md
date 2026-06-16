@@ -56,6 +56,12 @@ CONFIG_BPF_JIT=y
 CONFIG_HAVE_EBPF_JIT=y
 CONFIG_BPF_EVENTS=y
 CONFIG_DEBUG_INFO_BTF=y
+CONFIG_BPF_LSM=y
+```
+
+For LSM enforcement, `bpf` must also appear in the active LSM list at boot:
+```
+# /proc/cmdline or GRUB: lsm=lockdown,capability,...,bpf
 ```
 
 Check your kernel:
@@ -68,7 +74,20 @@ zgrep CONFIG_BPF /proc/config.gz
 
 # Check BTF support
 ls /sys/kernel/btf/vmlinux
+
+# Check BPF LSM is active
+cat /sys/kernel/security/lsm   # should contain "bpf"
 ```
+
+#### WSL2 Note
+
+On WSL2, securityfs may not be auto-mounted. If `/sys/kernel/security/lsm` is
+missing, mount it manually:
+```bash
+sudo mount -t securityfs none /sys/kernel/security
+```
+Warmor's `IsLSMSupported()` also falls back to parsing `/proc/cmdline`, so the
+agent starts correctly either way.
 
 ### Build Dependencies
 ```bash
@@ -303,9 +322,6 @@ sudo aa-complain /usr/local/bin/warmor
 ## Future Enhancements
 
 - [ ] Support for more syscalls (read, write, unlink, etc.)
-- [ ] eBPF-based enforcement (return -EPERM from kernel)
-- [ ] LSM (Linux Security Module) integration
-- [ ] Container-aware monitoring (cgroup filtering)
 - [ ] Performance counters and statistics
 - [ ] Dynamic program loading/unloading
 

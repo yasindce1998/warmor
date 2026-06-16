@@ -75,6 +75,7 @@ int tracepoint__syscalls__sys_enter_openat(struct trace_event_raw_sys_enter* ctx
 	return 0;
 }
 
+// Force BTF type emission for bpf2go -type flag
+const struct file_event *unused_file_event __attribute__((unused));
+
 char LICENSE[] SEC("license") = "GPL";
-
-

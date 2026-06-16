@@ -15,9 +15,9 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type execve_event execve_monitor ../../bpf/execve_monitor.bpf.c -- -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type file_event openat_monitor ../../bpf/openat_monitor.bpf.c -- -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type network_event connect_monitor ../../bpf/connect_monitor.bpf.c -- -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type execve_event execve_monitor ../../bpf/execve_monitor.bpf.c -- -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type file_event openat_monitor ../../bpf/openat_monitor.bpf.c -- -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type network_event connect_monitor ../../bpf/connect_monitor.bpf.c -- -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
 
 type Loader struct {
 	execveObjs  *execve_monitorObjects

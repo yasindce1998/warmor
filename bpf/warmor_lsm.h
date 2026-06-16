@@ -37,7 +37,7 @@ struct policy_value {
 };
 
 // LSM event sent to userspace for events without a policy map hit
-struct lsm_event {
+struct warmor_event {
 	__u32 pid;
 	__u32 uid;
 	__u32 gid;
@@ -128,7 +128,7 @@ static __always_inline void emit_lsm_event(
 	__u16 remote_port, __u32 remote_addr_v4,
 	const __u8 *remote_addr_v6)
 {
-	struct lsm_event *event;
+	struct warmor_event *event;
 
 	event = bpf_ringbuf_reserve(&lsm_events, sizeof(*event), 0);
 	if (!event)
@@ -163,5 +163,10 @@ static __always_inline void emit_lsm_event(
 
 	bpf_ringbuf_submit(event, 0);
 }
+
+// Force BTF type emission for bpf2go -type flag
+const struct warmor_event *unused_warmor_event __attribute__((unused));
+const struct policy_key *unused_policy_key __attribute__((unused));
+const struct policy_value *unused_policy_value __attribute__((unused));
 
 #endif /* __WARMOR_LSM_H */

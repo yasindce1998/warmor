@@ -66,7 +66,10 @@ line, e.g. `lsm=lockdown,capability,...,bpf`.
 
 Warmor checks these at startup:
 
-- `IsLSMSupported()` verifies `bpf` is in the active LSM list.
+- `IsLSMSupported()` verifies `bpf` is in the active LSM list. It reads
+  `/sys/kernel/security/lsm` first, then falls back to parsing the `lsm=`
+  parameter in `/proc/cmdline` (needed on WSL2 where securityfs is not
+  auto-mounted).
 - `LoadLSM()` verifies `/sys/kernel/btf/vmlinux` exists and returns an
   actionable error (rather than an opaque verifier failure) if BTF is missing.
 

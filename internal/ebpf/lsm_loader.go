@@ -20,15 +20,15 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event -type policy_key -type policy_value lsm_exec ../../bpf/lsm_exec.bpf.c -- -I../../bpf -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type lsm_event lsm_file ../../bpf/lsm_file.bpf.c -- -I../../bpf -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_connect ../../bpf/lsm_connect.bpf.c -- -I../../bpf -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_bind ../../bpf/lsm_bind.bpf.c -- -I../../bpf -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_listen ../../bpf/lsm_listen.bpf.c -- -I../../bpf -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_ptrace ../../bpf/lsm_ptrace.bpf.c -- -I../../bpf -I/usr/include/bpf
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_mount ../../bpf/lsm_mount.bpf.c -- -I../../bpf -I/usr/include/bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type warmor_event -type policy_key -type policy_value lsm_exec ../../bpf/lsm_exec.bpf.c -- -I../../bpf -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -type warmor_event lsm_file ../../bpf/lsm_file.bpf.c -- -I../../bpf -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_connect ../../bpf/lsm_connect.bpf.c -- -I../../bpf -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_bind ../../bpf/lsm_bind.bpf.c -- -I../../bpf -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_listen ../../bpf/lsm_listen.bpf.c -- -I../../bpf -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_ptrace ../../bpf/lsm_ptrace.bpf.c -- -I../../bpf -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go lsm_mount ../../bpf/lsm_mount.bpf.c -- -I../../bpf -I/usr/include/bpf -I/usr/include/x86_64-linux-gnu
 
-// LSMEvent matches struct lsm_event in warmor_lsm.h
+// LSMEvent matches struct warmor_event in warmor_lsm.h
 type LSMEvent struct {
 	PID          uint32
 	UID          uint32
@@ -108,15 +108,28 @@ type LSMLoader struct {
 }
 
 // IsLSMSupported checks whether the running kernel supports BPF LSM.
+// It first checks /sys/kernel/security/lsm (securityfs), then falls back to
+// parsing the kernel command line for the lsm= parameter (covers WSL2 where
+// securityfs may not be auto-mounted).
 func IsLSMSupported() bool {
-	data, err := os.ReadFile("/sys/kernel/security/lsm")
-	if err != nil {
+	if data, err := os.ReadFile("/sys/kernel/security/lsm"); err == nil {
+		for _, l := range strings.Split(strings.TrimSpace(string(data)), ",") {
+			if strings.TrimSpace(l) == "bpf" {
+				return true
+			}
+		}
 		return false
 	}
-	lsms := strings.Split(strings.TrimSpace(string(data)), ",")
-	for _, l := range lsms {
-		if strings.TrimSpace(l) == "bpf" {
-			return true
+	// Fallback: parse /proc/cmdline for lsm= boot parameter
+	if data, err := os.ReadFile("/proc/cmdline"); err == nil {
+		for _, field := range strings.Fields(string(data)) {
+			if strings.HasPrefix(field, "lsm=") {
+				for _, l := range strings.Split(field[4:], ",") {
+					if l == "bpf" {
+						return true
+					}
+				}
+			}
 		}
 	}
 	return false

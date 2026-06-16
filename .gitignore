@@ -5,11 +5,7 @@ warmor.exe
 *.so
 *.dylib
 
-# eBPF generated files
-internal/ebpf/execve_monitor_bpfeb.go
-internal/ebpf/execve_monitor_bpfeb.o
-internal/ebpf/execve_monitor_bpfel.go
-internal/ebpf/execve_monitor_bpfel.o
+# eBPF compiled BPF objects (raw .o in bpf/ dir, not the go-embedded ones)
 bpf/*.o
 
 # WASM build artifacts
