@@ -89,7 +89,7 @@ func StartNetworkTracing(sessionName string, callback func(*api.Event)) (windows
 
 	if ret != 0 {
 		// Try to stop the session we just started
-		procControlTrace.Call(
+		_, _, _ = procControlTrace.Call(
 			uintptr(sessionHandle),
 			uintptr(unsafe.Pointer(&sessionNameUTF16[0])),
 			uintptr(unsafe.Pointer(props)),

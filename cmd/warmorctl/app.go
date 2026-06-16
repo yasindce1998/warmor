@@ -31,8 +31,6 @@ type app struct {
 	policies  *policiesModel
 	rollouts  *rolloutsModel
 	certs     *certsModel
-
-	err error
 }
 
 func newApp(serverURL, token string) *app {

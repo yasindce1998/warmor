@@ -106,9 +106,10 @@ type Ed25519JWTIssuer struct {
 
 // NewEd25519JWTIssuer creates a JWT issuer using ed25519 keys.
 func NewEd25519JWTIssuer(priv ed25519.PrivateKey) *Ed25519JWTIssuer {
+	pub, _ := priv.Public().(ed25519.PublicKey)
 	return &Ed25519JWTIssuer{
 		priv: priv,
-		pub:  priv.Public().(ed25519.PublicKey),
+		pub:  pub,
 	}
 }
 

@@ -80,8 +80,9 @@ func LoadSigningKeyFromPEM(data []byte) (*SigningKey, error) {
 	if !ok {
 		return nil, fmt.Errorf("key is not ed25519")
 	}
+	pub, _ := priv.Public().(ed25519.PublicKey)
 	return &SigningKey{
-		Public:  priv.Public().(ed25519.PublicKey),
+		Public:  pub,
 		Private: priv,
 	}, nil
 }

@@ -94,7 +94,7 @@ func isServiceRunning(serviceName string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("open SCManager: %w", err)
 	}
-	defer closeServiceHandle(scManager)
+	defer func() { _ = closeServiceHandle(scManager) }()
 
 	// Open the service
 	service, err := openService(scManager, serviceName)
@@ -102,7 +102,7 @@ func isServiceRunning(serviceName string) (bool, error) {
 		// Service doesn't exist
 		return false, nil
 	}
-	defer closeServiceHandle(service)
+	defer func() { _ = closeServiceHandle(service) }()
 
 	// Query service status
 	status, err := queryServiceStatus(service)

@@ -146,7 +146,7 @@ func (c *Consumer) openAndConsume(ctx context.Context) error {
 		if err != nil {
 			// Clean up already-opened handles
 			for _, h := range c.traceHandles {
-				procCloseTrace.Call(uintptr(h))
+				_, _, _ = procCloseTrace.Call(uintptr(h))
 			}
 			c.traceHandles = nil
 			return fmt.Errorf("open trace %q: %w", name, err)
@@ -271,7 +271,7 @@ func (c *Consumer) Stop() error {
 
 	// Close trace handles first — this unblocks ProcessTrace
 	for _, h := range c.traceHandles {
-		procCloseTrace.Call(uintptr(h))
+		_, _, _ = procCloseTrace.Call(uintptr(h))
 	}
 	c.traceHandles = nil
 
@@ -280,15 +280,15 @@ func (c *Consumer) Stop() error {
 
 	// Stop trace sessions
 	if c.processSessionHandle != 0 {
-		StopProcessTracing(c.processSessionHandle, c.sessionName+"-process")
+		_ = StopProcessTracing(c.processSessionHandle, c.sessionName+"-process")
 		c.processSessionHandle = 0
 	}
 	if c.fileSessionHandle != 0 {
-		StopFileTracing(c.fileSessionHandle, c.sessionName+"-file")
+		_ = StopFileTracing(c.fileSessionHandle, c.sessionName+"-file")
 		c.fileSessionHandle = 0
 	}
 	if c.networkSessionHandle != 0 {
-		StopNetworkTracing(c.networkSessionHandle, c.sessionName+"-network")
+		_ = StopNetworkTracing(c.networkSessionHandle, c.sessionName+"-network")
 		c.networkSessionHandle = 0
 	}
 

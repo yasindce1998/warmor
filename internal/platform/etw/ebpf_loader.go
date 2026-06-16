@@ -140,19 +140,19 @@ func (l *EBPFLoader) Stop() error {
 
 	// Detach and unload programs
 	if l.processProgram != 0 {
-		l.detachProgram(l.processProgram)
-		windows.CloseHandle(l.processProgram)
+		_ = l.detachProgram(l.processProgram)
+		_ = windows.CloseHandle(l.processProgram)
 	}
 	if l.fileProgram != 0 {
-		l.detachProgram(l.fileProgram)
-		windows.CloseHandle(l.fileProgram)
+		_ = l.detachProgram(l.fileProgram)
+		_ = windows.CloseHandle(l.fileProgram)
 	}
 	if l.networkProgram != 0 {
-		l.detachProgram(l.networkProgram)
-		windows.CloseHandle(l.networkProgram)
+		_ = l.detachProgram(l.networkProgram)
+		_ = windows.CloseHandle(l.networkProgram)
 	}
 	if l.eventMap != 0 {
-		windows.CloseHandle(l.eventMap)
+		_ = windows.CloseHandle(l.eventMap)
 	}
 
 	log.Println("✓ eBPF programs unloaded")
