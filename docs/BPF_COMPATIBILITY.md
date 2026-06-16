@@ -13,14 +13,15 @@ The kernel structs we read (`linux_binprm`, `dentry`, `socket`, `sock`,
 differ between kernel versions and configs. We rely on **CO-RE** (Compile Once –
 Run Everywhere):
 
-- `bpf/vmlinux_minimal.h` declares **only the fields we touch**, each struct
-  tagged `__attribute__((preserve_access_index))`.
+- `bpf/vmlinux.h` provides the full set of kernel type definitions (generated
+  from a 6.19 kernel's BTF), each struct tagged
+  `__attribute__((preserve_access_index))`.
 - At load time, `cilium/ebpf` reads the running kernel's own BTF
   (`/sys/kernel/btf/vmlinux`) and **relocates** every field access to the
   correct offset for that kernel.
 
 This means a single compiled `.o` runs across kernels — *provided the field
-actually exists and our declared shape matches the kernel's*.
+actually exists in the running kernel's BTF*.
 
 ### Rule: read nested fields with `BPF_CORE_READ`, never copy whole structs
 
@@ -42,8 +43,14 @@ struct qstr q;
 bpf_probe_read_kernel(&q, sizeof(q), &dentry->d_name);
 ```
 
-When adding a hook that reaches into a new struct, add the minimal field(s) to
-`vmlinux_minimal.h` and access them with `BPF_CORE_READ`.
+When adding a hook that reaches into a new struct, the types are already
+available in `vmlinux.h` — just access them with `BPF_CORE_READ`.
+
+To regenerate `vmlinux.h` from a running kernel (e.g. after a major version bump):
+
+```sh
+cd bpf && make gen-vmlinux
+```
 
 ## Kernel requirements
 
@@ -106,9 +113,10 @@ vimto -kernel ghcr.io/cilium/ci-kernels:stable-selftests -- \
 
 ## Known risks / limitations
 
-- **`vmlinux_minimal.h` is maintained by hand.** Adding a field that doesn't
-  exist on an older kernel, or assuming a struct layout, can silently misread.
-  Mitigation: minimal field set + `BPF_CORE_READ` + the kernel matrix above.
+- **`vmlinux.h` is generated from a single kernel version (6.19).** Fields
+  removed in older kernels will fail CO-RE relocation at load time. Mitigation:
+  only access fields via `BPF_CORE_READ` (which gracefully fails relocation) +
+  the kernel matrix above.
 - **Old LTS kernels are not yet tested.** Upstream only ships `-selftests`
   (BPF-LSM-enabled) images for release channels, so the matrix currently spans
   ~6.18–7.0. Building selftests images for 5.15/6.1 and adding them is the
