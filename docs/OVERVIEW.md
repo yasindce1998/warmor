@@ -94,9 +94,7 @@
 
 - **[Quick Start](quick-start.md)** — Get warmor running in 5 minutes
 - **[Architecture](architecture.md)** — System design and components
-- **[PRD](PRD.md)** — Product requirements and phase tracking
-- **[Phase 7: Advanced Features](phase7-advanced-features.md)** — Policy server, A/B testing, SIEM
-- **[Phase 8: Production Infrastructure](phase8-production-infrastructure.md)** — mTLS, CLI, containers, observability
+- **[PRD](PRD.md)** — Product requirements, phase tracking, and detailed feature reference
 - **[Linux Guide](PLATFORM_LINUX.md)** — Production eBPF platform
 - **[Windows Guide](PLATFORM_WINDOWS.md)** — Beta ETW/eBPF platform
 - **[macOS Guide](PLATFORM_MACOS.md)** — Beta ESF platform

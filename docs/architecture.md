@@ -734,8 +734,6 @@ Application → Syscall → ESF Hook → ESF Client → warmor Daemon → WASM �
 - [Product Requirements](PRD.md)
 - [Project Overview](OVERVIEW.md)
 - [Quick Start](quick-start.md)
-- [Phase 7: Advanced Features](phase7-advanced-features.md)
-- [Phase 8: Production Infrastructure](phase8-production-infrastructure.md)
 - [Linux Platform Guide](PLATFORM_LINUX.md)
 - [Windows Platform Guide](PLATFORM_WINDOWS.md)
 - [macOS Platform Guide](PLATFORM_MACOS.md)

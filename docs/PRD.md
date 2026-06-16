@@ -2,8 +2,8 @@
 
 **Project Name:** warmor (WebAssembly + Armor)  
 **Tagline:** Cross-platform, Wasm-powered system-level security enforcer  
-**Version:** 1.4.0-beta  
-**Date:** 2026-06-15  
+**Version:** 1.5.0-beta  
+**Date:** 2026-06-16  
 **Status:** Phase 8 Complete
 
 ---
@@ -757,7 +757,87 @@ Cold Path (Cache Miss):
 - [x] Canary rollouts with consistent agent bucketing
 - [x] 4 built-in sandbox profiles (strict, network-deny, readonly, limited)
 
-### Phase 8: Production Hardening & Operations (Weeks 29-36) ⏳ IN PROGRESS
+#### Policy Server API
+
+```bash
+warmor-server --listen :8443 --policy-dir ./policies
+```
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/policies` | List all policies |
+| POST | `/api/v1/policies` | Create policy |
+| GET | `/api/v1/policies/{name}` | Get policy by name |
+| PUT | `/api/v1/policies/{name}` | Update policy |
+| DELETE | `/api/v1/policies/{name}` | Delete policy |
+| POST | `/api/v1/agents/register` | Register agent |
+| POST | `/api/v1/agents/{id}/heartbeat` | Agent heartbeat (returns assigned policy) |
+| GET | `/admin/rollouts` | List active rollouts |
+| POST | `/admin/rollouts` | Create rollout |
+| PUT | `/admin/rollouts/{id}` | Update rollout percentage |
+| DELETE | `/admin/rollouts/{id}` | Abort rollout |
+
+#### A/B Testing & Canary Rollouts
+
+Rollouts use consistent hashing (SHA-256 of `rolloutID:agentID` mod 100) for deterministic bucket assignment:
+
+```bash
+# Create rollout targeting 10% of production agents
+curl -X POST http://server:8443/admin/rollouts \
+  -d '{"target_policy": "network-egress-v2", "percentage": 10, "labels": {"env": "production"}}'
+
+# Ramp to 50%
+curl -X PUT http://server:8443/admin/rollouts/{id} -d '{"percentage": 50}'
+```
+
+#### Network Filtering
+
+CIDR blocklist and per-process rate limiting run before WASM evaluation:
+
+```go
+NetFilterConfig: &enforcer.NetFilterConfig{
+    BlockCIDRs: []string{"169.254.0.0/16", "fc00::/7"},
+    RateLimit:  200,
+    Window:     time.Minute,
+}
+```
+
+#### Process Sandboxing
+
+| Profile | DenyNetwork | ReadOnlyFS | IsolatePID | Blocked Syscalls |
+|---------|-------------|------------|------------|------------------|
+| `strict` | Yes | Yes | Yes | All caps dropped |
+| `network-deny` | Yes | No | No | — |
+| `readonly` | No | Yes | No | — |
+| `limited` | No | No | No | ptrace, mount, reboot, kexec_load |
+
+```go
+sandbox := enforcer.Sandbox()
+sandbox.ApplySandbox(pid, "strict")
+```
+
+#### SIEM Integration (CEF over Syslog)
+
+Events stream in CEF format to syslog collectors (Splunk, QRadar, ArcSight, Elastic):
+
+```
+CEF:0|Warmor|warmor-agent|1.0|file_open|file_open_deny|8|src=node-1 dvcpid=4321 duser=1000 cs1=malware cs1Label=comm filePath=/etc/shadow msg=policy violation rt=1705313400000
+```
+
+```go
+sink, _ := streaming.NewSyslogSink(streaming.SyslogConfig{
+    Network: "udp", Addr: "siem.corp:514", Facility: 1,
+})
+opts := &enforcer.Options{StreamSinks: []streaming.Sink{sink}}
+```
+
+| Decision | CEF Severity | Syslog Priority |
+|----------|-------------|-----------------|
+| deny | 8 (High) | LOG_CRIT |
+| log/audit | 4 (Medium) | LOG_NOTICE |
+| allow | 1 (Low) | LOG_INFO |
+
+### Phase 8: Production Hardening & Operations (Weeks 29-36) ✅ COMPLETE
 **Goal:** Secure the distribution channel, provide operator tooling, add runtime observability, and integrate with container runtimes
 
 **Track A: mTLS & Policy Signing** ✅ COMPLETE
@@ -798,6 +878,126 @@ Cold Path (Cache Miss):
 - [x] Prometheus metrics scraped and visualized in Grafana (dashboard + alerts)
 - [x] New containers automatically get policies applied based on labels
 - [x] Zero plaintext secrets in transit or at rest
+
+#### mTLS Certificate Authority
+
+```
+┌────────────┐         ┌─────────────────┐         ┌──────────────┐
+│   CA Key   │──signs──▶│  Server Cert    │         │  Agent Cert  │
+│ (ed25519)  │         │  (warmor-server)│         │  (agent-01)  │
+└────────────┘         └─────────────────┘         └──────────────┘
+                              ▲                           ▲
+                              │         mTLS              │
+                              └───────────────────────────┘
+```
+
+```bash
+# Generate certificates via warmorctl
+warmorctl certs generate --ca --out ./certs/
+warmorctl certs generate --server --ca-cert ./certs/ca.crt --ca-key ./certs/ca.key --out ./certs/
+warmorctl certs generate --agent --ca-cert ./certs/ca.crt --ca-key ./certs/ca.key --name agent-01 --out ./certs/
+
+# Start server with mTLS
+warmor-server --listen :8443 --tls-cert ./certs/server.crt --tls-key ./certs/server.key --tls-ca ./certs/ca.crt
+
+# Start agent with mTLS
+warmor-daemon --server https://warmor-server:8443 --tls-cert ./certs/agent-01.crt --tls-key ./certs/agent-01.key --tls-ca ./certs/ca.crt
+```
+
+#### Policy Signing
+
+```bash
+warmor-server policy sign --key signing.key --policy policy.wasm --out policy.signed
+warmor-daemon --verify-policy-sig --signing-pub signing.pub
+```
+
+#### JWT Authentication
+
+| Algorithm | Use Case | Key Type |
+|-----------|----------|----------|
+| HMAC-SHA256 | Shared-secret environments | `[]byte` |
+| EdDSA (Ed25519) | Zero-trust environments | `ed25519.PrivateKey` |
+
+#### warmorctl TUI
+
+```bash
+warmorctl                              # Launch interactive TUI
+warmorctl --server https://server:8443 --cert agent.crt --key agent.key
+```
+
+| Tab | Description |
+|-----|-------------|
+| Dashboard | Real-time event stream, deny/allow counts, latency sparklines |
+| Agents | Connected agents with heartbeat status, labels, assigned policy |
+| Policies | CRUD operations on fleet policies |
+| Rollouts | A/B testing rollout management with percentage ramps |
+| Certs | Generate and inspect mTLS certificates |
+
+Key bindings: `Tab`/`Shift+Tab` switch tabs, `j`/`k` navigate, `Enter` select, `q` quit.
+
+Source: `cmd/warmorctl/` — main.go, app.go, dashboard.go, agents.go, policies.go, rollouts.go, certs.go, api.go
+
+#### Prometheus Metrics
+
+Exported on `:9090/metrics`:
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `warmor_lsm_decisions_total` | Counter | `hook`, `action` |
+| `warmor_lsm_decision_duration_seconds` | Histogram | `hook` |
+| `warmor_policy_loads_total` | Counter | `policy_id`, `status` |
+| `warmor_events_total` | Counter | `type`, `action` |
+| `warmor_cache_hits_total` | Counter | — |
+| `warmor_cache_misses_total` | Counter | — |
+
+#### Grafana & Alerting
+
+Dashboard at `deploy/grafana/warmor-dashboard.json` (auto-provisioned):
+- Row 1: Event rates (allow/deny/audit) per hook type
+- Row 2: Decision latency P50/P95/P99
+- Row 3: Policy load success/failure, cache hit ratio
+- Row 4: Agent fleet health
+
+Alert rules in `deploy/prometheus/alerts.yml`:
+- `WarmorHighDenyRate` — `rate(warmor_lsm_decisions_total{action="deny"}[5m]) > 100`
+- `WarmorAgentDown` — `time() - warmor_agent_last_heartbeat_seconds > 300`
+- `WarmorPolicyLoadFailure` — `increase(warmor_policy_loads_total{status="error"}[5m]) > 0`
+
+```bash
+# Local monitoring stack
+cd deploy/ && docker compose -f docker-compose.monitoring.yml up -d
+# Prometheus: http://localhost:9091 | Grafana: http://localhost:3000 (admin/warmor)
+```
+
+#### Container Runtime Integration
+
+```bash
+# containerd
+warmor-daemon --containerd-socket /run/containerd/containerd.sock --per-container-policy
+
+# CRI-O (install OCI hook)
+sudo cp deploy/crio/warmor-hook.json /etc/containers/oci/hooks.d/
+```
+
+Per-container policy scoping via labels: containers with `io.warmor/policy=<name>` get that policy assigned automatically. The daemon resolves `cgroup_id → container_id → policy_name → WASM binary`.
+
+Source: `internal/container/` — detector.go, containerd_monitor.go, containerd_shim.go, policy_scope.go
+
+#### Kubernetes Deployment
+
+```bash
+helm install warmor deploy/helm/warmor \
+  --namespace warmor-system --create-namespace \
+  --set daemon.lsmEnforce=true \
+  --set daemon.containerRuntime=containerd \
+  --set daemon.perContainerPolicy=true \
+  --set tls.enabled=true \
+  --set tls.caSecret=warmor-ca \
+  --set serviceMonitor.enabled=true \
+  --set grafana.dashboardEnabled=true
+```
+
+DaemonSet runs with: `privileged: true`, `hostPID: true`, `hostNetwork: true`, volume mounts for containerd socket, BPF filesystem, and policy directory.
 
 ---
 
@@ -944,8 +1144,8 @@ Cold Path (Cache Miss):
 
 1. **Integration Testing:** Validate LSM-BPF enforcement on Linux 5.7+ with real workloads
 2. **Community Building:** Gather feedback from production deployments
-3. **Enterprise Features:** Stateful policies and fleet management (Phase 7)
-4. **Ecosystem:** Build policy library and community contributions
+3. **Ecosystem:** Build policy library and community contributions
+4. **Phase 9 (Future):** Multi-cluster federation, policy marketplace, eBPF-for-Windows enforcement
 
 ### Key Differentiators
 
@@ -956,7 +1156,7 @@ Cold Path (Cache Miss):
 
 ---
 
-**Document Version:** 1.4.0-beta  
-**Last Updated:** 2026-06-15  
+**Document Version:** 1.5.0-beta  
+**Last Updated:** 2026-06-16  
 **Status:** Phase 8 Complete  
-**Next Review:** After Phase 8 Track A (mTLS) completion
+**Next Review:** After Phase 9 scoping

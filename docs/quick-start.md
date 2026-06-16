@@ -274,7 +274,7 @@ helm install warmor deploy/helm/warmor \
 | Enable alerting | Set `alerting.enabled=true` — see [values.yaml](../deploy/helm/warmor/values.yaml) |
 | Restrict to specific containers | Use `daemon.cgroupFilter` or `--per-container-policy` |
 | Deploy per-namespace policies | Install the WarmorPolicy CRD — see [CRD guide](crd-usage.md) |
-| Advanced features (Phase 7) | [Phase 7 Guide](phase7-advanced-features.md) |
+| Advanced features (Phase 7+8) | [PRD — Phase 7 & 8](PRD.md#phase-7-advanced-features-weeks-23-28--complete) |
 
 ## Common Operations
 
