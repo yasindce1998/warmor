@@ -10,8 +10,23 @@ Deploy as a DaemonSet in **audit-only mode** — nothing is blocked, safe to try
 
 **Prerequisites:**
 - Kubernetes 1.25+ cluster with Linux nodes (kernel 5.8+)
-- `helm` v3.10+
+- `helm` v3.10+ (OCI support requires 3.8+)
 - `kubectl` configured for your cluster
+
+```bash
+helm install warmor oci://ghcr.io/yasindce1998/warmor/charts/warmor \
+  --version 0.2.0 \
+  --namespace warmor-system --create-namespace \
+  --set daemon.auditMode=true
+```
+
+Or from a local clone:
+```bash
+git clone https://github.com/yasindce1998/warmor.git
+helm install warmor ./warmor/deploy/helm/warmor \
+  --namespace warmor-system --create-namespace \
+  --set daemon.auditMode=true
+```
 
 ### Option B: Standalone Binary
 
@@ -77,7 +92,8 @@ sudo systemctl enable --now warmor
 ## 1. Install (Audit Mode)
 
 ```bash
-helm install warmor deploy/helm/warmor \
+helm install warmor oci://ghcr.io/yasindce1998/warmor/charts/warmor \
+  --version 0.2.0 \
   --namespace warmor-system --create-namespace \
   --set daemon.auditMode=true
 ```
@@ -103,7 +119,8 @@ curl -s http://localhost:9090/metrics | grep warmor_events_total
 Copy one of the [example policies](../examples/policies/) into your values:
 
 ```bash
-helm upgrade warmor deploy/helm/warmor \
+helm upgrade warmor oci://ghcr.io/yasindce1998/warmor/charts/warmor \
+  --version 0.2.0 \
   --namespace warmor-system \
   --set daemon.auditMode=true \
   --set-file policy.yaml=examples/policies/block-crypto-miners.yaml
@@ -116,7 +133,8 @@ Review the audit logs — denied events are logged but **not enforced** in audit
 Once you're confident the policy won't disrupt workloads:
 
 ```bash
-helm upgrade warmor deploy/helm/warmor \
+helm upgrade warmor oci://ghcr.io/yasindce1998/warmor/charts/warmor \
+  --version 0.2.0 \
   --namespace warmor-system \
   --set daemon.auditMode=false
 ```
@@ -126,7 +144,8 @@ helm upgrade warmor deploy/helm/warmor \
 For synchronous kernel-level blocking (denied operations never execute):
 
 ```bash
-helm upgrade warmor deploy/helm/warmor \
+helm upgrade warmor oci://ghcr.io/yasindce1998/warmor/charts/warmor \
+  --version 0.2.0 \
   --namespace warmor-system \
   --set daemon.auditMode=false \
   --set daemon.lsmEnforce=true
@@ -255,7 +274,8 @@ sudo cp deploy/crio/warmor-hook.json /etc/containers/oci/hooks.d/
 The Helm chart deploys warmor with container runtime integration automatically:
 
 ```bash
-helm install warmor deploy/helm/warmor \
+helm install warmor oci://ghcr.io/yasindce1998/warmor/charts/warmor \
+  --version 0.2.0 \
   --namespace warmor-system --create-namespace \
   --set daemon.containerRuntime=containerd \
   --set daemon.perContainerPolicy=true

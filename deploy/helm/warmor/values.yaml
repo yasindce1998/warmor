@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/yasindce1998/warmor
-  tag: ""
+  tag: "latest"
   pullPolicy: IfNotPresent
 
 nameOverride: ""
