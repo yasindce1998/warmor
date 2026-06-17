@@ -1,6 +1,10 @@
 package api
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
 
 // EventType represents the type of syscall event
 type EventType int32
@@ -22,6 +26,34 @@ func (t EventType) String() string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+func (t EventType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.String())
+}
+
+func (t *EventType) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		// Fall back to numeric for backward compat
+		var n int32
+		if err2 := json.Unmarshal(data, &n); err2 != nil {
+			return fmt.Errorf("EventType must be string or number: %w", err)
+		}
+		*t = EventType(n)
+		return nil
+	}
+	switch s {
+	case "PROCESS":
+		*t = EventTypeProcess
+	case "FILE":
+		*t = EventTypeFile
+	case "NETWORK":
+		*t = EventTypeNetwork
+	default:
+		return fmt.Errorf("unknown EventType: %q", s)
+	}
+	return nil
 }
 
 // BaseEvent contains common fields for all event types

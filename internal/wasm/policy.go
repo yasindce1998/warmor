@@ -31,8 +31,8 @@ func NewPolicy(ctx context.Context, runtime *Runtime) (*Policy, error) {
 
 // Evaluate evaluates an event against the policy
 func (p *Policy) Evaluate(ctx context.Context, event *api.Event) (api.Action, error) {
-	// Serialize event to JSON
-	eventJSON, err := json.Marshal(event)
+	// Serialize event to the flat JSON format the Rust WASM module expects
+	eventJSON, err := marshalEventForWASM(event)
 	if err != nil {
 		return api.ActionDeny, fmt.Errorf("marshal event: %w", err)
 	}
@@ -74,6 +74,58 @@ func (p *Policy) Evaluate(ctx context.Context, event *api.Event) (api.Action, er
 
 	action := api.Action(results[0])
 	return action, nil
+}
+
+// marshalEventForWASM produces the flat JSON structure the Rust serde enum expects.
+// The Rust code uses #[serde(tag = "type")] with variants PROCESS/FILE/NETWORK,
+// where all fields must be at the top level (no nested sub-objects).
+func marshalEventForWASM(event *api.Event) ([]byte, error) {
+	m := map[string]any{
+		"pid":  event.PID,
+		"uid":  event.UID,
+		"gid":  event.GID,
+		"comm": event.Comm,
+	}
+
+	switch event.GetType() {
+	case api.EventTypeProcess:
+		m["type"] = "PROCESS"
+		m["filename"] = event.Filename
+		if event.Process != nil {
+			m["filename"] = event.Process.Filename
+		}
+	case api.EventTypeFile:
+		m["type"] = "FILE"
+		if event.File != nil {
+			m["operation"] = event.File.Operation
+			m["path"] = event.File.Path
+			m["flags"] = event.File.Flags
+		} else {
+			m["operation"] = "open"
+			m["path"] = event.Filename
+			m["flags"] = uint32(0)
+		}
+	case api.EventTypeNetwork:
+		m["type"] = "NETWORK"
+		if event.Network != nil {
+			m["operation"] = event.Network.Operation
+			m["protocol"] = event.Network.Protocol
+			m["remote_addr"] = event.Network.RemoteAddr
+			m["remote_port"] = event.Network.RemotePort
+			m["local_port"] = event.Network.LocalPort
+		} else {
+			m["operation"] = "connect"
+			m["protocol"] = "tcp"
+			m["remote_addr"] = ""
+			m["remote_port"] = uint16(0)
+			m["local_port"] = uint16(0)
+		}
+	default:
+		m["type"] = "PROCESS"
+		m["filename"] = event.Filename
+	}
+
+	return json.Marshal(m)
 }
 
 // Close cleans up the policy instance
