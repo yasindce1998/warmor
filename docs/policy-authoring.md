@@ -122,12 +122,46 @@ Start with audit mode to validate your policy won't disrupt workloads, then enab
 
 ---
 
+## Compilation
+
+YAML policies are compiled to WASM at daemon startup. You can also pre-compile them:
+
+```bash
+# Pre-compile (requires Rust + wasm32-unknown-unknown target)
+warmor-compile -o policy.wasm policy.yaml
+
+# Validate without compiling
+warmor-compile --validate policy.yaml
+
+# Emit Rust source for inspection
+warmor-compile --rust-only policy.yaml > policy.rs
+```
+
+The daemon accepts both `.yaml` and `.wasm` files via `--policy`. When given a `.yaml` file, it checks for a `.wasm` file with the same base name and loads it directly if found — skipping compilation entirely.
+
+Pre-compilation is useful when:
+- The Rust toolchain isn't available on the target host
+- You want reproducible builds in CI
+- You want faster daemon startup (no compile step)
+
+### WASM Serialization Format
+
+The compiled WASM module receives events as flat JSON with a `"type"` discriminator:
+
+```json
+{"type": "PROCESS", "pid": 1234, "uid": 0, "gid": 0, "comm": "sh", "filename": "/tmp/exploit"}
+{"type": "FILE", "pid": 1234, "uid": 1000, "gid": 1000, "comm": "cat", "operation": "read", "path": "/etc/shadow", "flags": 0}
+{"type": "NETWORK", "pid": 1234, "uid": 1000, "gid": 1000, "comm": "nc", "operation": "connect", "protocol": "tcp", "remote_addr": "10.0.0.1", "remote_port": 4444, "local_port": 0}
+```
+
+---
+
 ## Validation
 
 Validate a policy locally before deploying:
 
 ```bash
-make policy-check POLICY=path/to/policy.yaml
+warmor-compile --validate path/to/policy.yaml
 ```
 
 Or with the daemon directly:
