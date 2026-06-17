@@ -12,7 +12,6 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"time"
 
 	ciliumebpf "github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -52,7 +51,7 @@ func (e *LSMEvent) ToEvent() Event {
 		GID:       e.GID,
 		Comm:      nullTerminatedString(e.Comm[:]),
 		Filename:  nullTerminatedString(e.Filename[:]),
-		Timestamp: time.Unix(0, int64(e.Timestamp)),
+		Timestamp: bootTimeToWallClock(e.Timestamp),
 		CgroupID:  e.CgroupID,
 	}
 

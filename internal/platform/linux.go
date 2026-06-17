@@ -19,6 +19,7 @@ type LinuxConfig struct {
 	CgroupFilter []string
 	LSMEnforce   bool
 	RequireLSM   bool
+	SkipLSM      bool
 }
 
 type LinuxPlatform struct {
@@ -75,6 +76,11 @@ func (p *LinuxPlatform) Load(ctx context.Context) error {
 	// tracepoint-only (observe) mode. With RequireLSM set, the operator has
 	// demanded kernel enforcement, so any failure to establish it is fatal
 	// (fail-closed startup) rather than a silent downgrade.
+	if p.config.SkipLSM {
+		fmt.Println("LSM-BPF loading skipped (--no-lsm)")
+		p.logSecurityPosture()
+		return nil
+	}
 	lsmLoader, err := ebpf.LoadLSM()
 	if err != nil {
 		if p.config.RequireLSM {

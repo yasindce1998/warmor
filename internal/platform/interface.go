@@ -52,6 +52,9 @@ type Config struct {
 	// rejection), Load fails instead of silently falling back to
 	// tracepoint-only observation. This selects fail-closed startup.
 	RequireLSM bool
+	// SkipLSM disables LSM-BPF program loading entirely, running in
+	// tracepoint-only observe mode regardless of kernel capabilities.
+	SkipLSM bool
 }
 
 // Current returns the platform for the current OS with default config.

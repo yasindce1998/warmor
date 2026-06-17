@@ -40,7 +40,7 @@ broken or misbehaving policy denies rather than silently allows.
 
 | Mode | How to select | Behavior |
 |---|---|---|
-| **Observe-only** | default (no `--lsm-enforce`, or LSM unavailable) | Events logged/evaluated; nothing blocked in-kernel. |
+| **Observe-only** | default (no `--lsm-enforce`, or LSM unavailable), or `--no-lsm` | Events logged/evaluated; nothing blocked in-kernel. |
 | **Audit** | LSM loaded, `--audit` | Would-be denials are logged (`audit` events) but not enforced. |
 | **Enforce** | `--lsm-enforce` | `DENY` rules are blocked in-kernel. |
 
@@ -70,6 +70,7 @@ recommended posture for production enforcement nodes, typically paired with
 |---|---|---|
 | `--lsm-enforce` | `false` | Arm kernel blocking for `DENY` rules. Without it, LSM runs audit-only. |
 | `--require-lsm` | `false` | Fail to start unless LSM enforcement loads. Without it, degrade to observe-only. |
+| `--no-lsm` | `false` | Skip LSM-BPF loading entirely. Tracepoint-only observe mode — useful for environments where the verifier hangs or LSM is unsupported. |
 | `--audit` | `false` | Log would-be denials instead of enforcing them (userspace actions). |
 
 ## Recommended postures

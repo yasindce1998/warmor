@@ -29,6 +29,7 @@ type Options struct {
 	// established (fail-closed startup). Without it, an unsupported kernel
 	// degrades to tracepoint-only observation.
 	RequireLSM bool
+	SkipLSM    bool
 
 	// Streaming pipeline configuration
 	StreamSinks []streaming.Sink
@@ -91,6 +92,7 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		CgroupFilter: opts.CgroupFilter,
 		LSMEnforce:   opts.LSMEnforce,
 		RequireLSM:   opts.RequireLSM,
+		SkipLSM:      opts.SkipLSM,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize platform: %w", err)

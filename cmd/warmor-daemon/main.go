@@ -25,6 +25,7 @@ var (
 	cgroupFilter  = flag.String("cgroup-filter", "", "Cgroup paths to filter (comma-separated, or 'auto' for K8s pod discovery)")
 	lsmEnforce    = flag.Bool("lsm-enforce", false, "Enable LSM-BPF kernel-level blocking (requires CONFIG_BPF_LSM)")
 	requireLSM    = flag.Bool("require-lsm", false, "Fail to start unless BPF-LSM kernel enforcement can be loaded (fail-closed; default is to degrade to observe-only)")
+	noLSM         = flag.Bool("no-lsm", false, "Skip LSM-BPF loading entirely (tracepoint-only observe mode)")
 	eventSink     = flag.String("event-sink", "", "Event sinks: stdout, file:<path>, webhook:<url> (comma-separated)")
 	eventFileMax  = flag.Int64("event-file-max", 100*1024*1024, "Max event file size before rotation (bytes)")
 	webhookHeader = flag.String("webhook-header", "", "Webhook auth header (format: Key:Value)")
@@ -128,6 +129,7 @@ func main() {
 		LogLevel:     *logLevel,
 		LSMEnforce:   *lsmEnforce,
 		RequireLSM:   *requireLSM,
+		SkipLSM:      *noLSM,
 		StreamSinks:  sinks,
 		Labels:       labels,
 	})

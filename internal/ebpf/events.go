@@ -7,6 +7,16 @@ import (
 	"time"
 )
 
+var bootTimeOffset time.Duration
+
+func init() {
+	bootTimeOffset = computeBootTimeOffset()
+}
+
+func bootTimeToWallClock(bootNs uint64) time.Time {
+	return time.Unix(0, int64(bootNs)).Add(bootTimeOffset)
+}
+
 // EventKind distinguishes which ring buffer produced an event.
 type EventKind int
 
@@ -16,13 +26,13 @@ const (
 	EventKindNetwork
 )
 
-// ExecveEvent represents a process execution event from eBPF (matches struct execve_event in C).
 type ExecveEvent struct {
 	PID       uint32
 	UID       uint32
 	GID       uint32
 	Comm      [16]byte
 	Filename  [256]byte
+	_         [4]byte
 	Timestamp uint64
 	CgroupID  uint64
 }
@@ -35,12 +45,11 @@ func (e *ExecveEvent) ToEvent() Event {
 		GID:       e.GID,
 		Comm:      nullTerminatedString(e.Comm[:]),
 		Filename:  nullTerminatedString(e.Filename[:]),
-		Timestamp: time.Unix(0, int64(e.Timestamp)),
+		Timestamp: bootTimeToWallClock(e.Timestamp),
 		CgroupID:  e.CgroupID,
 	}
 }
 
-// OpenatEvent represents a file open event from eBPF (matches struct file_event in C).
 type OpenatEvent struct {
 	PID       uint32
 	UID       uint32
@@ -49,6 +58,7 @@ type OpenatEvent struct {
 	Path      [256]byte
 	Flags     uint32
 	Mode      uint32
+	_         [4]byte
 	Timestamp uint64
 	CgroupID  uint64
 }
@@ -63,12 +73,11 @@ func (e *OpenatEvent) ToEvent() Event {
 		Filename:  nullTerminatedString(e.Path[:]),
 		Flags:     e.Flags,
 		Mode:      e.Mode,
-		Timestamp: time.Unix(0, int64(e.Timestamp)),
+		Timestamp: bootTimeToWallClock(e.Timestamp),
 		CgroupID:  e.CgroupID,
 	}
 }
 
-// ConnectEvent represents a network connect event from eBPF (matches struct network_event in C).
 type ConnectEvent struct {
 	PID          uint32
 	UID          uint32
@@ -78,6 +87,7 @@ type ConnectEvent struct {
 	RemotePort   uint16
 	RemoteAddrV4 uint32
 	RemoteAddrV6 [16]byte
+	_            [4]byte
 	Timestamp    uint64
 	CgroupID     uint64
 }
@@ -93,7 +103,7 @@ func (e *ConnectEvent) ToEvent() Event {
 		RemoteAddr: addr,
 		RemotePort: ntohs(e.RemotePort),
 		Family:     e.Family,
-		Timestamp:  time.Unix(0, int64(e.Timestamp)),
+		Timestamp:  bootTimeToWallClock(e.Timestamp),
 		CgroupID:   e.CgroupID,
 	}
 }
