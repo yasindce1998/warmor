@@ -82,15 +82,15 @@ struct {
 	__type(value, __u8);
 } lsm_enforce SEC(".maps");
 
-// FNV-1a 32-bit hash — used to hash filenames/patterns into rule_hash
+// FNV-1a 32-bit hash — first 16 bytes only, for BPF verifier friendliness
 static __always_inline __u32 fnv1a_hash(const char *data, int len)
 {
-	__u32 hash = 2166136261u; // FNV offset basis
-	for (int i = 0; i < len && i < 256; i++) {
-		if (data[i] == 0)
+	__u32 hash = 2166136261u;
+	for (int i = 0; i < 16; i++) {
+		if (i >= len || data[i] == 0)
 			break;
 		hash ^= (__u32)data[i];
-		hash *= 16777619u; // FNV prime
+		hash *= 16777619u;
 	}
 	return hash;
 }

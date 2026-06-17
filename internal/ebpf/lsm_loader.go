@@ -34,6 +34,7 @@ type LSMEvent struct {
 	GID          uint32
 	Comm         [16]byte
 	Filename     [256]byte
+	_            [4]byte
 	Timestamp    uint64
 	CgroupID     uint64
 	EventType    uint8

@@ -15,9 +15,9 @@ int BPF_PROG(lsm_exec_check, struct linux_binprm *bprm, int ret)
 	if (should_skip_cgroup(cgid))
 		return 0;
 
-	// Read the filename being executed
+	// Read the filename being executed (64 bytes max for verifier-friendly hashing)
 	const char *filename = BPF_CORE_READ(bprm, filename);
-	char fname_buf[256];
+	char fname_buf[64];
 	int len = bpf_probe_read_kernel_str(fname_buf, sizeof(fname_buf), filename);
 	if (len <= 0)
 		return 0;

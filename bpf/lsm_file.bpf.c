@@ -21,7 +21,7 @@ int BPF_PROG(lsm_file_check, struct file *file)
 	if (!name)
 		return 0;
 
-	char fname_buf[256];
+	char fname_buf[64];
 	int len = bpf_probe_read_kernel_str(fname_buf, sizeof(fname_buf), name);
 	if (len <= 0)
 		return 0;

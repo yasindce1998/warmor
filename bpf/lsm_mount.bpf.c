@@ -14,11 +14,7 @@ int BPF_PROG(lsm_mount_check, const char *dev_name, const struct path *path,
 	if (!type)
 		return 0;
 
-	// fnv1a_hash scans up to 256 bytes, so the buffer must be at least that
-	// large or the verifier rejects the in-loop read as out-of-bounds of the
-	// stack object (as lsm_exec/lsm_file already do with a 256-byte buffer).
-	// Filesystem type names are short; the extra stack is just headroom.
-	char type_buf[256];
+	char type_buf[64];
 	int len = bpf_probe_read_kernel_str(type_buf, sizeof(type_buf), type);
 	if (len <= 0)
 		return 0;
