@@ -1,4 +1,4 @@
-# warmor: Cross-Platform WASM-Powered Security Enforcer
+# Warmor: Cross-Platform WASM-Powered Security Enforcer
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/55cb3f75-fb55-4537-858d-8c7b94facbc2" alt="warmor logo">
