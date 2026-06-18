@@ -287,6 +287,8 @@ helm install warmor oci://ghcr.io/yasindce1998/warmor/charts/warmor \
 
 | Goal | Guide |
 |------|-------|
+| Auto-generate policies from audit logs | [Policy Generation](policy-generation.md) |
+| Enforce SBOM-declared binaries only | [SBOM Enforcement](sbom-enforcement.md) |
 | Write custom policies | [Policy Authoring](policy-authoring.md) |
 | Manage fleet with warmorctl | Run `warmorctl` for interactive TUI |
 | Set up mTLS | See [mTLS Setup](#mtls-setup) above |
