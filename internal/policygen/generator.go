@@ -160,11 +160,6 @@ func generateExecRules(group behaviorGroup, variables map[string]any) []RuleYAML
 }
 
 func generateFileRules(group behaviorGroup, variables map[string]any) []RuleYAML {
-	type fileKey struct {
-		collapsed any
-		isGlob    bool
-	}
-
 	var allPaths []string
 	totalCount := 0
 	for _, b := range group.Behaviors {

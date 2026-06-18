@@ -142,7 +142,9 @@ func TestAutoDetectInvalid(t *testing.T) {
 func TestResolveAPK(t *testing.T) {
 	rootfs := t.TempDir()
 	apkDB := filepath.Join(rootfs, "lib", "apk", "db")
-	os.MkdirAll(apkDB, 0755)
+	if err := os.MkdirAll(apkDB, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	content := `P:nginx
 V:1.25.3-r1
@@ -160,7 +162,9 @@ F:usr/lib
 R:libm.so
 
 `
-	os.WriteFile(filepath.Join(apkDB, "installed"), []byte(content), 0644)
+	if err := os.WriteFile(filepath.Join(apkDB, "installed"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	packages := []Package{
 		{Name: "nginx", Version: "1.25.3-r1"},
@@ -199,10 +203,16 @@ R:libm.so
 func TestResolveDEB(t *testing.T) {
 	rootfs := t.TempDir()
 	infoDir := filepath.Join(rootfs, "var", "lib", "dpkg", "info")
-	os.MkdirAll(infoDir, 0755)
+	if err := os.MkdirAll(infoDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
-	os.WriteFile(filepath.Join(infoDir, "nginx.list"), []byte("/usr/sbin/nginx\n/usr/share/nginx/index.html\n"), 0644)
-	os.WriteFile(filepath.Join(infoDir, "libc6:amd64.list"), []byte("/lib/x86_64-linux-gnu/libc.so.6\n/usr/lib/x86_64-linux-gnu/libc.so\n"), 0644)
+	if err := os.WriteFile(filepath.Join(infoDir, "nginx.list"), []byte("/usr/sbin/nginx\n/usr/share/nginx/index.html\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(infoDir, "libc6:amd64.list"), []byte("/lib/x86_64-linux-gnu/libc.so.6\n/usr/lib/x86_64-linux-gnu/libc.so\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	packages := []Package{
 		{Name: "nginx", Version: "1.25"},
