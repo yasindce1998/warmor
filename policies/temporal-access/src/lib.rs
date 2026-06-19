@@ -1,0 +1,327 @@
+use serde::{Deserialize, Serialize};
+use std::ffi::{CStr, CString};
+use std::os::raw::c_char;
+use std::slice;
+
+#[derive(Deserialize)]
+struct Event {
+    #[serde(rename = "type")]
+    event_type: String,
+    pid: u32,
+    uid: u32,
+    gid: u32,
+    comm: String,
+    filename: String,
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    operation: String,
+    #[serde(default)]
+    remote_addr: String,
+    #[serde(default)]
+    remote_port: u16,
+    #[serde(default)]
+    container_age_secs: u64,
+    #[serde(default)]
+    hour_of_day: u8,
+    #[serde(default)]
+    day_of_week: u8,
+    #[serde(default)]
+    is_maintenance_window: bool,
+}
+
+#[derive(Serialize)]
+struct Decision {
+    action: String,
+    reason: String,
+}
+
+impl Decision {
+    fn allow(reason: &str) -> Self {
+        Decision { action: "allow".to_string(), reason: reason.to_string() }
+    }
+    fn deny(reason: &str) -> Self {
+        Decision { action: "deny".to_string(), reason: reason.to_string() }
+    }
+    fn log(reason: &str) -> Self {
+        Decision { action: "log".to_string(), reason: reason.to_string() }
+    }
+}
+
+const ACTION_ALLOW: i32 = 0;
+const ACTION_DENY: i32 = 1;
+const ACTION_LOG: i32 = 2;
+
+const STARTUP_WINDOW_SECS: u64 = 60;
+const INIT_BINARIES: &[&str] = &[
+    "/usr/bin/tini",
+    "/sbin/tini",
+    "/usr/local/bin/dumb-init",
+    "/docker-entrypoint.sh",
+    "/entrypoint.sh",
+];
+
+const MAINTENANCE_ONLY_TOOLS: &[&str] = &[
+    "/usr/bin/apt",
+    "/usr/bin/apt-get",
+    "/usr/bin/yum",
+    "/usr/bin/dnf",
+    "/usr/bin/apk",
+    "/usr/sbin/service",
+    "/usr/bin/systemctl",
+    "/usr/bin/pg_dump",
+    "/usr/bin/mysqldump",
+    "/usr/bin/mongodump",
+];
+
+const BUSINESS_HOURS_ONLY: &[&str] = &[
+    "/usr/bin/ssh",
+    "/usr/bin/scp",
+    "/usr/bin/rsync",
+    "/usr/bin/sftp",
+];
+
+const CRON_ALLOWED_HOURS: &[(u8, u8)] = &[
+    (2, 4),   // Backup window: 02:00 - 04:00
+    (6, 7),   // Log rotation: 06:00 - 07:00
+];
+
+#[no_mangle]
+pub extern "C" fn malloc(size: usize) -> *mut u8 {
+    let mut buf = Vec::with_capacity(size);
+    let ptr = buf.as_mut_ptr();
+    std::mem::forget(buf);
+    ptr
+}
+
+#[no_mangle]
+pub extern "C" fn free(ptr: *mut u8, size: usize) {
+    unsafe {
+        let _ = Vec::from_raw_parts(ptr, 0, size);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn abi_version() -> u32 {
+    2
+}
+
+#[no_mangle]
+pub extern "C" fn evaluate_syscall(event_ptr: *const u8, event_len: usize) -> i32 {
+    let event_bytes = unsafe { slice::from_raw_parts(event_ptr, event_len) };
+
+    let event: Event = match serde_json::from_slice(event_bytes) {
+        Ok(e) => e,
+        Err(_) => return ACTION_DENY,
+    };
+
+    let decision = evaluate_policy(&event);
+    match decision.action.as_str() {
+        "allow" => ACTION_ALLOW,
+        "deny" => ACTION_DENY,
+        "log" => ACTION_LOG,
+        _ => ACTION_DENY,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn evaluate(event_json: *const c_char) -> *mut c_char {
+    let event_str = unsafe {
+        if event_json.is_null() {
+            return CString::new(r#"{"action":"deny","reason":"null event"}"#)
+                .unwrap()
+                .into_raw();
+        }
+        match CStr::from_ptr(event_json).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                return CString::new(r#"{"action":"deny","reason":"invalid UTF-8"}"#)
+                    .unwrap()
+                    .into_raw()
+            }
+        }
+    };
+
+    let event: Event = match serde_json::from_str(event_str) {
+        Ok(e) => e,
+        Err(err) => {
+            let msg = format!(r#"{{"action":"deny","reason":"parse error: {}"}}"#, err);
+            return CString::new(msg).unwrap().into_raw();
+        }
+    };
+
+    let decision = evaluate_policy(&event);
+    let json = serde_json::to_string(&decision).unwrap_or_else(|_| {
+        r#"{"action":"deny","reason":"serialization error"}"#.to_string()
+    });
+    CString::new(json).unwrap().into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn free_string(s: *mut c_char) {
+    unsafe {
+        if !s.is_null() {
+            let _ = CString::from_raw(s);
+        }
+    }
+}
+
+fn evaluate_policy(event: &Event) -> Decision {
+    match event.event_type.as_str() {
+        "process" | "PROCESS" => evaluate_process(event),
+        "file" | "FILE" => evaluate_file(event),
+        "network" | "NETWORK" => evaluate_network(event),
+        _ => Decision::log("Unknown event type"),
+    }
+}
+
+fn evaluate_process(event: &Event) -> Decision {
+    // Startup-only binaries: entrypoints/init systems allowed only during first 60s
+    for init_bin in INIT_BINARIES {
+        if event.filename.contains(init_bin) {
+            if event.container_age_secs > STARTUP_WINDOW_SECS {
+                return Decision::deny(&format!(
+                    "Init binary {} not allowed after startup window ({}s)",
+                    init_bin, STARTUP_WINDOW_SECS
+                ));
+            }
+            return Decision::allow("Init binary during startup window");
+        }
+    }
+
+    // Maintenance-only tools: only during maintenance windows
+    for tool in MAINTENANCE_ONLY_TOOLS {
+        if event.filename == *tool {
+            if !event.is_maintenance_window {
+                return Decision::deny(&format!(
+                    "{} only allowed during maintenance windows",
+                    tool
+                ));
+            }
+            return Decision::log(&format!("Maintenance tool {} during window", tool));
+        }
+    }
+
+    // Business-hours-only tools (SSH, SCP): Mon-Fri 08:00-18:00
+    for tool in BUSINESS_HOURS_ONLY {
+        if event.filename == *tool {
+            let is_weekday = event.day_of_week >= 1 && event.day_of_week <= 5;
+            let is_business_hours = event.hour_of_day >= 8 && event.hour_of_day < 18;
+
+            if !is_weekday || !is_business_hours {
+                return Decision::deny(&format!(
+                    "{} only allowed Mon-Fri 08:00-18:00 (current: day={}, hour={})",
+                    tool, event.day_of_week, event.hour_of_day
+                ));
+            }
+            return Decision::allow("Within business hours");
+        }
+    }
+
+    // Cron-like processes only allowed during their scheduled windows
+    if event.comm == "cron" || event.comm == "crond" || event.parent_comm == "cron" {
+        let in_window = CRON_ALLOWED_HOURS.iter().any(|(start, end)| {
+            event.hour_of_day >= *start && event.hour_of_day < *end
+        });
+
+        if !in_window {
+            return Decision::deny(&format!(
+                "Cron execution outside allowed windows (hour={})",
+                event.hour_of_day
+            ));
+        }
+    }
+
+    // After container startup (>5min), deny new binary first-execution
+    if event.container_age_secs > 300 {
+        let suspicious_first_exec_paths = ["/tmp/", "/dev/shm/", "/var/tmp/", "/root/"];
+        for path in &suspicious_first_exec_paths {
+            if event.filename.starts_with(path) {
+                return Decision::deny(&format!(
+                    "New binary execution from {} after container stabilization period",
+                    path
+                ));
+            }
+        }
+    }
+
+    Decision::allow("No temporal violation")
+}
+
+fn evaluate_file(event: &Event) -> Decision {
+    // Block config writes after startup period
+    if event.container_age_secs > STARTUP_WINDOW_SECS {
+        let config_paths = ["/etc/", "/usr/local/etc/", "/opt/conf/"];
+        for cfg_path in &config_paths {
+            if event.path.starts_with(cfg_path) && event.operation == "write" {
+                return Decision::deny(&format!(
+                    "Config modification of {} blocked after startup (container age: {}s)",
+                    event.path, event.container_age_secs
+                ));
+            }
+        }
+    }
+
+    // Log file access outside business hours (data exfiltration indicator)
+    let sensitive_data_paths = ["/var/lib/data/", "/opt/data/", "/mnt/secrets/"];
+    for data_path in &sensitive_data_paths {
+        if event.path.starts_with(data_path) {
+            let is_weekday = event.day_of_week >= 1 && event.day_of_week <= 5;
+            let is_business_hours = event.hour_of_day >= 8 && event.hour_of_day < 18;
+
+            if !is_weekday || !is_business_hours {
+                return Decision::log(&format!(
+                    "Sensitive data access outside business hours: {} (day={}, hour={})",
+                    event.path, event.day_of_week, event.hour_of_day
+                ));
+            }
+        }
+    }
+
+    // Backup operations only during backup window (02:00-04:00)
+    let backup_indicators = [".bak", ".dump", ".sql", ".tar.gz", ".backup"];
+    for indicator in &backup_indicators {
+        if event.path.ends_with(indicator) && event.operation == "write" {
+            let in_backup_window = event.hour_of_day >= 2 && event.hour_of_day < 4;
+            if !in_backup_window {
+                return Decision::deny(&format!(
+                    "Backup file creation outside window: {} (hour={})",
+                    event.path, event.hour_of_day
+                ));
+            }
+        }
+    }
+
+    Decision::allow("No temporal file violation")
+}
+
+fn evaluate_network(event: &Event) -> Decision {
+    // Block all outbound during container first 5 seconds (prevent container-start exfiltration)
+    if event.container_age_secs < 5 && event.remote_port != 53 {
+        return Decision::deny(&format!(
+            "Outbound network blocked during container initialization (age={}s)",
+            event.container_age_secs
+        ));
+    }
+
+    // Log network activity outside business hours
+    let is_weekday = event.day_of_week >= 1 && event.day_of_week <= 5;
+    let is_business_hours = event.hour_of_day >= 6 && event.hour_of_day < 22;
+
+    if !is_weekday || !is_business_hours {
+        // Allow critical infra ports even outside hours
+        let always_allowed = [53, 443, 5432, 6379, 3306];
+        if !always_allowed.contains(&event.remote_port) {
+            return Decision::deny(&format!(
+                "Non-critical network connection outside operating hours (port={}, hour={})",
+                event.remote_port, event.hour_of_day
+            ));
+        }
+        return Decision::log(&format!(
+            "Network activity outside business hours: {}:{} (hour={})",
+            event.remote_addr, event.remote_port, event.hour_of_day
+        ));
+    }
+
+    Decision::allow("No temporal network violation")
+}
