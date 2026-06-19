@@ -52,7 +52,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Loaded %d policies from %s\n", len(policies), *dir)
 	}
 
-	for _, arg := range flag.Args() {
+	args := flag.Args()
+	var files []string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-o":
+			if i+1 < len(args) {
+				*output = args[i+1]
+				i++
+			}
+		default:
+			files = append(files, args[i])
+		}
+	}
+
+	for _, arg := range files {
 		p, err := policymerge.LoadFile(arg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)

@@ -34,7 +34,20 @@ func main() {
 		os.Exit(0)
 	}
 
-	args := flag.Args()
+	rawArgs := flag.Args()
+	var args []string
+	for i := 0; i < len(rawArgs); i++ {
+		switch rawArgs[i] {
+		case "-o":
+			if i+1 < len(rawArgs) {
+				*output = rawArgs[i+1]
+				i++
+			}
+		default:
+			args = append(args, rawArgs[i])
+		}
+	}
+
 	if len(args) != 2 {
 		fmt.Fprintf(os.Stderr, "error: exactly 2 policy files required\n")
 		flag.Usage()
