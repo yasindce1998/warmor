@@ -28,7 +28,22 @@ uname -r
 
 ## Step 1: Install Dependencies
 
-### Ubuntu / Debian
+### Automatic (Recommended)
+
+Run the installer script — it detects your distro and installs everything:
+
+```bash
+chmod +x scripts/install-prereqs.sh
+sudo ./scripts/install-prereqs.sh
+```
+
+It will tell you exactly what got installed and what's still missing (with reasons why).
+
+### Manual Install
+
+If you prefer to install manually:
+
+#### Ubuntu / Debian
 
 ```bash
 # System packages
@@ -46,7 +61,7 @@ source ~/.cargo/env
 rustup target add wasm32-wasi
 ```
 
-### Fedora / RHEL
+#### Fedora / RHEL
 
 ```bash
 sudo dnf install -y clang llvm libbpf-devel kernel-devel pkg-config
@@ -54,7 +69,7 @@ sudo dnf install -y clang llvm libbpf-devel kernel-devel pkg-config
 # Go and Rust same as above
 ```
 
-### Verify Everything is Installed
+#### Verify Everything is Installed
 
 ```bash
 go version          # Should show 1.26+
