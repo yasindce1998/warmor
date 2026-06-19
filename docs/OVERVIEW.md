@@ -1,8 +1,8 @@
 # warmor Project Status
 
-**Version:** 1.5.0-beta  
-**Last Updated:** 2026-06-16  
-**Status:** Phase 8 Complete — Production Infrastructure
+**Version:** 2.0.0-beta  
+**Last Updated:** 2026-06-19  
+**Status:** Phase 9 Complete — Autonomous Security Intelligence
 
 ---
 
@@ -76,6 +76,17 @@
 - Grafana dashboards with auto-provisioning
 - Alert rules (deny rate spikes, heartbeat timeouts, policy load failures)
 
+### Phase 9: Autonomous Security Intelligence — COMPLETE
+- **Live Policy Synthesis** — Observe containers in learning mode, auto-generate least-privilege policies
+- **Policy Simulator** — Replay historical events against candidate policies, predict impact before deployment
+- **Supply Chain Tripwires** — eBPF-powered binary integrity verification at exec time (SHA-256 allowlists)
+- **Container Escape Detection** — Pattern-based detection of nsenter, host mounts, ptrace, docker.sock access
+- **Canary Rollout** — Deny-rate anomaly detection with automatic rollback during policy deployments
+- **Drift Detection** — Z-score based behavioral fingerprinting across fleet; flag statistical outliers
+- **Temporal Policies** — Time-dimension constraints (container age limits, time-of-day windows, day-of-week)
+- **Attack Graph Visualization** — MITRE ATT&CK technique correlation with kill-chain DAG per container
+- **Cross-Container Blast Radius** — BFS-based reachability analysis across network, volume, and namespace edges
+
 ---
 
 ## Key Metrics
@@ -100,3 +111,14 @@
 - **[macOS Guide](PLATFORM_MACOS.md)** — Beta ESF platform
 - **[Security Posture](SECURITY_POSTURE.md)** — Fail-open vs fail-closed behavior
 - **[BPF Compatibility](BPF_COMPATIBILITY.md)** — Kernel version matrix
+
+### Phase 9: Security Intelligence
+- **[Learning Mode](learning-mode.md)** — Live policy synthesis from container behavior
+- **[Policy Simulator](policy-simulator.md)** — Replay events against candidate policies
+- **[Supply Chain Integrity](supply-chain-integrity.md)** — Binary hash verification at exec time
+- **[Escape Detection](escape-detection.md)** — Container escape pattern detection
+- **[Canary Rollout](canary-rollout.md)** — Anomaly-based automatic rollback
+- **[Drift Detection](drift-detection.md)** — Fleet behavioral fingerprint comparison
+- **[Temporal Policies](temporal-policies.md)** — Time-dimension policy constraints
+- **[Attack Graph](attack-graph.md)** — MITRE ATT&CK kill-chain visualization
+- **[Blast Radius](blast-radius.md)** — Cross-container reachability analysis

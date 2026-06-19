@@ -1,0 +1,75 @@
+package simulator
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"sort"
+	"strings"
+)
+
+// FormatJSON writes the simulation result as indented JSON.
+func FormatJSON(w io.Writer, result *SimulationResult) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
+}
+
+// FormatText writes a human-readable simulation report.
+func FormatText(w io.Writer, result *SimulationResult) error {
+	fmt.Fprintf(w, "Policy Simulation Report\n")
+	fmt.Fprintf(w, "========================\n\n")
+	fmt.Fprintf(w, "Events replayed: %d\n", result.TotalEvents)
+	fmt.Fprintf(w, "Duration:        %s\n\n", result.Duration.Round(1e6))
+
+	fmt.Fprintf(w, "Decision breakdown:\n")
+	fmt.Fprintf(w, "  ALLOW: %d (%.1f%%)\n", result.WouldAllow, pct(result.WouldAllow, result.TotalEvents))
+	fmt.Fprintf(w, "  DENY:  %d (%.1f%%)\n", result.WouldDeny, pct(result.WouldDeny, result.TotalEvents))
+	fmt.Fprintf(w, "  LOG:   %d (%.1f%%)\n\n", result.WouldLog, pct(result.WouldLog, result.TotalEvents))
+
+	if len(result.UniqueNewDenials) > 0 {
+		sort.Slice(result.UniqueNewDenials, func(i, j int) bool {
+			return result.UniqueNewDenials[i].Count > result.UniqueNewDenials[j].Count
+		})
+		fmt.Fprintf(w, "New denials (%d unique patterns):\n", len(result.UniqueNewDenials))
+		fmt.Fprintf(w, "  %-10s %-16s %-40s %s\n", "TYPE", "COMMAND", "TARGET", "COUNT")
+		fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 80))
+		for _, d := range result.UniqueNewDenials {
+			fmt.Fprintf(w, "  %-10s %-16s %-40s %d\n", d.EventType, d.Comm, truncate(d.Target, 40), d.Count)
+		}
+		fmt.Fprintln(w)
+	} else {
+		fmt.Fprintf(w, "No new denials — all previously-allowed events remain allowed.\n\n")
+	}
+
+	if len(result.UniqueNewAllows) > 0 {
+		sort.Slice(result.UniqueNewAllows, func(i, j int) bool {
+			return result.UniqueNewAllows[i].Count > result.UniqueNewAllows[j].Count
+		})
+		fmt.Fprintf(w, "New allows (%d unique patterns):\n", len(result.UniqueNewAllows))
+		fmt.Fprintf(w, "  %-10s %-16s %-40s %s\n", "TYPE", "COMMAND", "TARGET", "COUNT")
+		fmt.Fprintf(w, "  %s\n", strings.Repeat("-", 80))
+		for _, a := range result.UniqueNewAllows {
+			fmt.Fprintf(w, "  %-10s %-16s %-40s %d\n", a.EventType, a.Comm, truncate(a.Target, 40), a.Count)
+		}
+		fmt.Fprintln(w)
+	} else {
+		fmt.Fprintf(w, "No new allows — all previously-denied events remain denied.\n\n")
+	}
+
+	return nil
+}
+
+func pct(n, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(n) / float64(total) * 100
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-3] + "..."
+}

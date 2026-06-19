@@ -21,6 +21,7 @@ import (
 // Options configures the enforcer at startup
 type Options struct {
 	AuditMode    bool
+	LearningMode bool
 	CgroupFilter []string
 	MetricsPort  int
 	LogLevel     string
@@ -64,6 +65,7 @@ type Enforcer struct {
 	sandbox       *SandboxManager
 	policyPath    string
 	auditMode     bool
+	learningMode  bool
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
@@ -218,6 +220,7 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		sandbox:        sandboxMgr,
 		policyPath:     policyPath,
 		auditMode:      opts.AuditMode,
+		learningMode:   opts.LearningMode,
 		ctx:            ctx,
 		cancel:         cancel,
 	}, nil
@@ -328,6 +331,21 @@ func (e *Enforcer) handleEvent(event *api.Event) {
 				return
 			}
 		}
+	}
+
+	// Learning mode: allow everything but still emit to pipeline for recording
+	if e.learningMode {
+		result := &api.ActionResult{
+			Action:    api.ActionAllow,
+			Reason:    "learning mode",
+			Timestamp: time.Now(),
+		}
+		e.logger.LogEvent(event, result)
+		metrics.RecordEvent(result.Action.String())
+		if e.pipeline != nil {
+			e.pipeline.Emit(event, result)
+		}
+		return
 	}
 
 	// Check cache first
