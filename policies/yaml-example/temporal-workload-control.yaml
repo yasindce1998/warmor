@@ -1,0 +1,93 @@
+name: temporal-workload-control
+version: 1
+description: "Time-dimension policy constraints: container age limits, maintenance windows, and day-of-week restrictions"
+
+variables:
+  init_only_binaries:
+    - "/usr/bin/apt-get"
+    - "/usr/bin/apk"
+    - "/usr/bin/pip"
+    - "/usr/bin/npm"
+    - "/usr/local/bin/pip"
+    - "/usr/local/bin/npm"
+    - "/usr/bin/yum"
+    - "/usr/bin/dnf"
+  maintenance_tools:
+    - "/usr/bin/pg_dump"
+    - "/usr/bin/mysqldump"
+    - "/usr/bin/mongodump"
+    - "/usr/bin/redis-cli"
+    - "/usr/sbin/logrotate"
+  cron_binaries:
+    - "/usr/sbin/cron"
+    - "/usr/sbin/crond"
+    - "/usr/bin/crontab"
+    - "/usr/bin/at"
+    - "/usr/bin/batch"
+
+rules:
+  # Package managers should only run during container init (first 60s)
+  - name: block-late-package-install
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $init_only_binaries }
+    time_constraints:
+      max_container_age: 60s
+      action_outside_window: deny
+    action: allow
+    reason: "Package install allowed only during container initialization"
+
+  # Database maintenance only during off-hours (02:00-05:00 UTC)
+  - name: maintenance-window-only
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $maintenance_tools }
+    time_constraints:
+      time_of_day:
+        start: "02:00"
+        end: "05:00"
+        timezone: "UTC"
+      action_outside_window: deny
+    action: allow
+    reason: "Database maintenance restricted to 02:00-05:00 UTC window"
+
+  # Cron jobs restricted to weekdays only
+  - name: weekday-cron-only
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $cron_binaries }
+    time_constraints:
+      days_of_week: ["monday", "tuesday", "wednesday", "thursday", "friday"]
+      action_outside_window: deny
+    action: allow
+    reason: "Cron execution restricted to weekdays"
+
+  # Block all new network connections after container is 5 minutes old
+  # (short-lived init containers should not make new connections after startup)
+  - name: init-container-network-lockdown
+    event: network
+    conditions:
+      all:
+        - remote_port: { gt: 0 }
+    time_constraints:
+      max_container_age: 300s
+      action_outside_window: log
+    action: allow
+    reason: "Network activity after init period (potential compromise)"
+
+  # Block process forking after initial startup (immutable workload pattern)
+  - name: immutable-after-startup
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    time_constraints:
+      max_container_age: 30s
+      action_outside_window: deny
+    action: allow
+    reason: "Temp execution blocked after startup window"
+
+default_action: allow

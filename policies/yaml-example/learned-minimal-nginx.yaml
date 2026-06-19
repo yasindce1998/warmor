@@ -1,0 +1,132 @@
+name: learned-minimal-nginx
+version: 1
+description: "Auto-generated least-privilege policy from learning mode observation of nginx container"
+
+# This policy was synthesized by `warmor-learn --duration 30m --cgroup 4026531835`
+# after observing a standard nginx:1.25-alpine container.
+# Only operations actually seen during the learning window are allowed.
+# Everything else is denied by default.
+#
+# Learning window: 30 minutes
+# Container image: nginx:1.25-alpine
+# Total unique operations observed: 23
+# Generated: 2026-06-19T10:00:00Z
+
+rules:
+  # Process executions observed during learning
+  - name: allow-nginx-master
+    event: process
+    conditions:
+      all:
+        - path: { equals: "/usr/sbin/nginx" }
+    action: allow
+    reason: "Observed: nginx master process"
+
+  - name: allow-nginx-worker
+    event: process
+    conditions:
+      all:
+        - comm: { equals: "nginx" }
+    action: allow
+    reason: "Observed: nginx worker processes"
+
+  # File operations observed during learning
+  - name: allow-config-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/nginx/**" }
+        - operation: "read"
+    action: allow
+    reason: "Observed: nginx config file reads"
+
+  - name: allow-html-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/usr/share/nginx/html/**" }
+        - operation: "read"
+    action: allow
+    reason: "Observed: static content serving"
+
+  - name: allow-log-write
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/var/log/nginx/access.log", "/var/log/nginx/error.log"] }
+        - operation: "write"
+    action: allow
+    reason: "Observed: log file writes"
+
+  - name: allow-pid-file
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/run/nginx.pid" }
+        - operation: { any_of: ["write", "read"] }
+    action: allow
+    reason: "Observed: PID file management"
+
+  - name: allow-tmp-files
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/cache/nginx/**" }
+        - operation: { any_of: ["write", "read", "unlink"] }
+    action: allow
+    reason: "Observed: nginx cache operations"
+
+  - name: allow-ssl-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/ssl/**" }
+        - operation: "read"
+    action: allow
+    reason: "Observed: TLS certificate reads"
+
+  - name: allow-resolv-read
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/resolv.conf" }
+        - operation: "read"
+    action: allow
+    reason: "Observed: DNS resolver config"
+
+  # Network operations observed during learning
+  - name: allow-http-listen
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [80, 443] }
+    action: allow
+    reason: "Observed: HTTP/HTTPS listening"
+
+  - name: allow-dns-lookup
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 53 }
+    action: allow
+    reason: "Observed: DNS resolution"
+
+  # Deny everything not observed
+  - name: deny-unknown-exec
+    event: process
+    conditions:
+      all:
+        - path: { none_of: ["/usr/sbin/nginx"] }
+        - comm: { not: "nginx" }
+    action: deny
+    reason: "Not observed during learning: unknown process"
+
+  - name: deny-unknown-network
+    event: network
+    conditions:
+      all:
+        - remote_port: { none_of: [53, 80, 443] }
+    action: deny
+    reason: "Not observed during learning: unexpected network connection"
+
+default_action: deny

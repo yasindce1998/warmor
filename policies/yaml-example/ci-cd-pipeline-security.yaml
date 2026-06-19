@@ -1,0 +1,129 @@
+name: ci-cd-pipeline-security
+version: 1
+description: "Security policy for CI/CD runner containers — restrict build agents to safe operations"
+
+variables:
+  allowed_build_tools:
+    - "/usr/bin/git"
+    - "/usr/bin/make"
+    - "/usr/bin/cmake"
+    - "/usr/bin/go"
+    - "/usr/local/go/bin/go"
+    - "/usr/bin/gcc"
+    - "/usr/bin/g++"
+    - "/usr/bin/rustc"
+    - "/usr/local/bin/cargo"
+    - "/usr/local/bin/node"
+    - "/usr/local/bin/npm"
+    - "/usr/local/bin/yarn"
+    - "/usr/local/bin/pnpm"
+    - "/usr/bin/python3"
+    - "/usr/local/bin/pip"
+    - "/usr/bin/docker"
+    - "/usr/bin/podman"
+    - "/usr/bin/mvn"
+    - "/usr/bin/gradle"
+  dangerous_binaries:
+    - "/usr/bin/nc"
+    - "/usr/bin/ncat"
+    - "/usr/bin/socat"
+    - "/usr/bin/nmap"
+    - "/usr/bin/tcpdump"
+    - "/usr/bin/wireshark"
+    - "/usr/sbin/iptables"
+    - "/usr/bin/nsenter"
+    - "/usr/bin/strace"
+  allowed_outbound_ports:
+    - 53
+    - 80
+    - 443
+    - 8080
+    - 8443
+    - 9418
+
+rules:
+  # Block dangerous tools that should never run in CI
+  - name: block-dangerous-in-ci
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $dangerous_binaries }
+    action: deny
+    reason: "Dangerous tool blocked in CI runner"
+
+  # Block execution from workspace temp directories (malicious build artifacts)
+  - name: block-workspace-tmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    action: deny
+    reason: "Execution from /tmp in CI runner (suspicious artifact)"
+
+  # Restrict outbound network to expected ports
+  - name: allow-standard-outbound
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: $allowed_outbound_ports }
+    action: allow
+    reason: "Expected CI outbound port"
+
+  # Block all other outbound (prevent supply chain callbacks)
+  - name: block-unexpected-outbound
+    event: network
+    conditions:
+      all:
+        - remote_port: { none_of: $allowed_outbound_ports }
+    action: deny
+    reason: "Unexpected outbound port from CI runner (supply chain attack risk)"
+
+  # Block access to cloud metadata endpoints (SSRF via CI)
+  - name: block-metadata-access
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 80 }
+    action: log
+    reason: "HTTP connection from CI (monitor for metadata endpoint access)"
+
+  # Protect CI secrets from being read by spawned processes
+  - name: protect-ci-secrets
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/run/secrets/**" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to CI secrets"
+
+  # Block modification of git config (credential theft)
+  - name: protect-git-config
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.gitconfig" }
+        - operation: "write"
+    action: deny
+    reason: "Git config modification (credential injection)"
+
+  # Block writing to system paths from CI
+  - name: block-system-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/usr/**" }
+        - operation: "write"
+    action: deny
+    reason: "Write to system path from CI runner"
+
+  # Audit Docker socket access (DinD privilege escalation)
+  - name: audit-docker-socket
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/var/run/docker.sock" }
+    action: audit
+    reason: "Docker socket access in CI (DinD privilege boundary)"
+
+default_action: allow

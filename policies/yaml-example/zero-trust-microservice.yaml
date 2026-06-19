@@ -1,0 +1,139 @@
+name: zero-trust-microservice
+version: 1
+description: "Zero-trust policy for a typical microservice — deny by default, allow only verified operations"
+
+# Zero-trust principle: no implicit trust based on network location.
+# Each microservice gets a tailored policy that allows ONLY its required
+# operations. Combine with warmor's blast radius analysis to validate
+# that compromised services cannot reach beyond their defined scope.
+
+variables:
+  allowed_processes:
+    - "/usr/local/bin/myservice"
+    - "/usr/bin/curl"
+  allowed_outbound_ports:
+    - 53
+    - 443
+    - 5432
+    - 6379
+
+rules:
+  # Only allow the application binary and health checks
+  - name: allow-app-binary
+    event: process
+    conditions:
+      all:
+        - path: { equals: "/usr/local/bin/myservice" }
+    action: allow
+    reason: "Primary application binary"
+
+  - name: allow-health-curl
+    event: process
+    conditions:
+      all:
+        - path: { equals: "/usr/bin/curl" }
+        - uid: { equals: 0 }
+    action: allow
+    reason: "Health check via curl (root only)"
+
+  # Block all other process execution
+  - name: deny-unknown-process
+    event: process
+    conditions:
+      all:
+        - path: { none_of: ["/usr/local/bin/myservice", "/usr/bin/curl"] }
+    action: deny
+    reason: "Zero-trust: unapproved process execution"
+
+  # Allow reading application config
+  - name: allow-config-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/myservice/**" }
+        - operation: "read"
+    action: allow
+    reason: "Application config read"
+
+  # Allow writing to log directory only
+  - name: allow-log-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/log/myservice/**" }
+        - operation: "write"
+    action: allow
+    reason: "Application log write"
+
+  # Allow TLS cert reads
+  - name: allow-tls-certs
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/ssl/certs/**" }
+        - operation: "read"
+    action: allow
+    reason: "TLS certificate read for mTLS"
+
+  # Block all writes to system paths
+  - name: deny-system-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/usr/**" }
+        - operation: "write"
+    action: deny
+    reason: "Zero-trust: system path write denied"
+
+  - name: deny-etc-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/**" }
+        - operation: "write"
+    action: deny
+    reason: "Zero-trust: config write denied"
+
+  # Allow outbound only to declared dependencies
+  - name: allow-dns
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 53 }
+    action: allow
+    reason: "DNS resolution"
+
+  - name: allow-https-egress
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 443 }
+    action: allow
+    reason: "HTTPS to upstream APIs"
+
+  - name: allow-postgres
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 5432 }
+    action: allow
+    reason: "PostgreSQL database connection"
+
+  - name: allow-redis
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 6379 }
+    action: allow
+    reason: "Redis cache connection"
+
+  # Block all other network activity
+  - name: deny-unknown-network
+    event: network
+    conditions:
+      all:
+        - remote_port: { none_of: [53, 443, 5432, 6379] }
+    action: deny
+    reason: "Zero-trust: undeclared network dependency blocked"
+
+default_action: deny

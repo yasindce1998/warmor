@@ -1,0 +1,119 @@
+name: supply-chain-allowlist
+version: 1
+description: "Binary integrity enforcement via SHA-256 hash allowlists for critical executables"
+
+# This policy works with warmor's supply chain integrity module.
+# Use `warmor-integrity-scan --rootfs /path --image myapp:latest -o allowlist.json`
+# to generate the integrity database. The policy below blocks execution of any
+# binary NOT in the allowlist, or whose hash has changed since the scan.
+
+variables:
+  trusted_system_bins:
+    - "/usr/bin/bash"
+    - "/usr/bin/sh"
+    - "/usr/bin/cat"
+    - "/usr/bin/ls"
+    - "/usr/bin/grep"
+    - "/usr/bin/awk"
+    - "/usr/bin/sed"
+    - "/usr/bin/find"
+    - "/usr/bin/echo"
+    - "/usr/bin/env"
+  trusted_runtime_bins:
+    - "/usr/local/bin/node"
+    - "/usr/local/bin/python3"
+    - "/usr/bin/java"
+    - "/usr/local/bin/ruby"
+  untrusted_drop_paths:
+    - "/tmp/**"
+    - "/dev/shm/**"
+    - "/var/tmp/**"
+    - "/run/user/**"
+    - "/home/*/.cache/**"
+
+rules:
+  # Block execution from writable drop locations unconditionally
+  - name: block-untrusted-drop-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/**" }
+    action: deny
+    reason: "Execution from writable drop location /tmp"
+
+  - name: block-devshm-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/dev/shm/**" }
+    action: deny
+    reason: "Execution from /dev/shm (common malware staging)"
+
+  - name: block-vartmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/var/tmp/**" }
+    action: deny
+    reason: "Execution from /var/tmp (persistence location)"
+
+  # Block execution of any binary in user-writable paths
+  - name: block-user-cache-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/home/*/.cache/**" }
+    action: deny
+    reason: "Execution from user cache directory"
+
+  # Block writing new executables to system paths (supply chain attack vector)
+  - name: block-bin-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/usr/bin/**" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root write to /usr/bin (binary tampering)"
+
+  - name: block-sbin-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/usr/sbin/**" }
+        - operation: "write"
+    action: deny
+    reason: "Write to /usr/sbin (system binary tampering)"
+
+  - name: block-local-bin-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/usr/local/bin/**" }
+        - operation: "write"
+    action: deny
+    reason: "Write to /usr/local/bin (runtime binary tampering)"
+
+  # Audit any ld.so.preload or ld.so.conf modification (library injection)
+  - name: detect-ld-preload-inject
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/etc/ld.so.preload", "/etc/ld.so.conf"] }
+        - operation: "write"
+    action: deny
+    reason: "LD preload/config modification (library injection attack)"
+
+  # Block modification of package manager databases
+  - name: block-dpkg-tamper
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/lib/dpkg/**" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root modification of dpkg database"
+
+default_action: allow

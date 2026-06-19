@@ -1,0 +1,160 @@
+name: runtime-integrity-monitoring
+version: 1
+description: "File integrity monitoring for critical system files and configuration drift detection"
+
+variables:
+  critical_configs:
+    - "/etc/passwd"
+    - "/etc/shadow"
+    - "/etc/group"
+    - "/etc/sudoers"
+    - "/etc/ssh/sshd_config"
+    - "/etc/pam.d/**"
+  auth_modules:
+    - "/lib/x86_64-linux-gnu/security/**"
+    - "/lib64/security/**"
+    - "/usr/lib/security/**"
+  system_services:
+    - "/etc/systemd/**"
+    - "/lib/systemd/**"
+    - "/etc/init.d/**"
+  kernel_modules:
+    - "/lib/modules/**"
+    - "/usr/lib/modules/**"
+
+rules:
+  # Block modification of user account files
+  - name: protect-passwd
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/passwd" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root modification of /etc/passwd"
+
+  - name: protect-shadow
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/shadow" }
+        - operation: { any_of: ["write", "read"] }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to /etc/shadow"
+
+  - name: protect-sudoers
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/sudoers" }
+        - operation: "write"
+    action: deny
+    reason: "Modification of sudoers file"
+
+  # Block PAM module manipulation (authentication bypass)
+  - name: protect-pam-modules
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/pam.d/**" }
+        - operation: "write"
+    action: deny
+    reason: "PAM configuration modification (authentication bypass risk)"
+
+  - name: protect-pam-libraries
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/lib/x86_64-linux-gnu/security/**" }
+        - operation: "write"
+    action: deny
+    reason: "PAM library modification (backdoor insertion)"
+
+  # Block systemd service manipulation
+  - name: protect-systemd-units
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/systemd/system/**" }
+        - operation: "write"
+    action: audit
+    reason: "Systemd unit file modification (persistence mechanism)"
+
+  - name: protect-initd
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/init.d/**" }
+        - operation: "write"
+    action: deny
+    reason: "Init script modification (persistence mechanism)"
+
+  # Block kernel module loading
+  - name: block-kernel-module-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/lib/modules/**" }
+        - operation: "write"
+    action: deny
+    reason: "Kernel module file write (rootkit installation)"
+
+  - name: block-insmod
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/usr/sbin/insmod", "/usr/sbin/modprobe", "/usr/bin/insmod"] }
+    action: deny
+    reason: "Kernel module load attempt in container"
+
+  # Block SSH config modification
+  - name: protect-sshd-config
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/ssh/sshd_config" }
+        - operation: "write"
+    action: deny
+    reason: "SSHD config modification (backdoor access)"
+
+  - name: protect-authorized-keys
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.ssh/authorized_keys" }
+        - operation: "write"
+    action: deny
+    reason: "Root authorized_keys modification (SSH backdoor)"
+
+  - name: protect-user-authorized-keys
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/**/.ssh/authorized_keys" }
+        - operation: "write"
+    action: audit
+    reason: "User authorized_keys modification"
+
+  # Block LD_PRELOAD persistence
+  - name: protect-ld-preload
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/ld.so.preload" }
+        - operation: "write"
+    action: deny
+    reason: "LD_PRELOAD file modification (library injection rootkit)"
+
+  # Block /etc/profile.d manipulation (shell startup persistence)
+  - name: protect-profile-scripts
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/profile.d/**" }
+        - operation: "write"
+    action: deny
+    reason: "Shell profile script modification (login persistence)"
+
+default_action: allow

@@ -1,0 +1,127 @@
+name: database-protection
+version: 1
+description: "Hardening policy for database containers — restrict to expected database operations only"
+
+variables:
+  postgres_bins:
+    - "/usr/lib/postgresql/16/bin/postgres"
+    - "/usr/lib/postgresql/16/bin/pg_isready"
+    - "/usr/lib/postgresql/16/bin/pg_ctl"
+    - "/usr/lib/postgresql/16/bin/initdb"
+    - "/usr/lib/postgresql/16/bin/pg_basebackup"
+    - "/usr/bin/pg_dump"
+    - "/usr/bin/pg_restore"
+    - "/usr/bin/psql"
+  mysql_bins:
+    - "/usr/sbin/mysqld"
+    - "/usr/bin/mysql"
+    - "/usr/bin/mysqldump"
+    - "/usr/bin/mysqlcheck"
+    - "/usr/bin/mysql_upgrade"
+    - "/usr/bin/mysqladmin"
+  allowed_db_ports:
+    - 5432
+    - 3306
+    - 27017
+    - 6379
+    - 9042
+
+rules:
+  # Block shells in database containers
+  - name: block-shell-exec
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/bin/bash", "/bin/sh", "/bin/zsh", "/usr/bin/bash", "/usr/bin/sh"] }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Interactive shell blocked in database container"
+
+  # Block network tools (no reason for nmap in a DB container)
+  - name: block-net-tools
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/usr/bin/curl", "/usr/bin/wget", "/usr/bin/nc", "/usr/bin/ssh", "/usr/bin/nmap"] }
+    action: deny
+    reason: "Network tool blocked in database container"
+
+  # Block compilers and interpreters (no code execution in DB)
+  - name: block-compilers
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/usr/bin/gcc", "/usr/bin/python3", "/usr/local/bin/node", "/usr/bin/perl", "/usr/bin/ruby"] }
+    action: deny
+    reason: "Compiler/interpreter blocked in database container"
+
+  # Protect data directories from non-DB users
+  - name: protect-pgdata
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/lib/postgresql/data/**" }
+        - operation: { any_of: ["write", "unlink"] }
+        - uid: { not: 999 }
+    action: deny
+    reason: "Non-postgres write to data directory"
+
+  - name: protect-mysql-data
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/lib/mysql/**" }
+        - operation: { any_of: ["write", "unlink"] }
+        - uid: { not: 999 }
+    action: deny
+    reason: "Non-mysql write to data directory"
+
+  # Block modification of database configs by non-root
+  - name: protect-pg-config
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/etc/postgresql/postgresql.conf", "/etc/postgresql/pg_hba.conf"] }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root modification of PostgreSQL config"
+
+  # Only allow expected database ports
+  - name: allow-db-ports
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: $allowed_db_ports }
+    action: allow
+    reason: "Expected database port"
+
+  # Block all outbound from database containers (they receive, not initiate)
+  - name: block-unexpected-outbound
+    event: network
+    conditions:
+      all:
+        - remote_port: { none_of: [53, 5432, 3306, 27017, 6379] }
+    action: deny
+    reason: "Unexpected outbound from database container"
+
+  # Audit all pg_dump/mysqldump (data export monitoring)
+  - name: audit-data-export
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/usr/bin/pg_dump", "/usr/bin/mysqldump", "/usr/bin/mongodump"] }
+    action: audit
+    reason: "Database export tool executed (data loss prevention)"
+
+  # Block write to WAL/binlog locations by non-DB users
+  - name: protect-wal-directory
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/lib/postgresql/data/pg_wal/**" }
+        - uid: { not: 999 }
+    action: deny
+    reason: "Non-postgres write to WAL directory"
+
+default_action: allow

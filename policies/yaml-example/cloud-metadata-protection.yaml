@@ -1,0 +1,138 @@
+name: cloud-metadata-protection
+version: 1
+description: "Block SSRF attacks targeting cloud metadata services and protect cloud credentials"
+
+# Cloud metadata services (169.254.169.254) are a prime SSRF target.
+# This policy blocks common techniques used to steal IAM credentials,
+# access instance metadata, and pivot through cloud APIs.
+
+variables:
+  http_clients:
+    - "/usr/bin/curl"
+    - "/usr/bin/wget"
+    - "/usr/bin/httpie"
+    - "/usr/local/bin/http"
+  cloud_clis:
+    - "/usr/bin/aws"
+    - "/usr/local/bin/aws"
+    - "/usr/bin/gcloud"
+    - "/usr/local/bin/gcloud"
+    - "/usr/bin/az"
+    - "/usr/local/bin/az"
+    - "/usr/bin/oci"
+  cloud_credential_paths:
+    - "/root/.aws/**"
+    - "/home/**/.aws/**"
+    - "/root/.config/gcloud/**"
+    - "/home/**/.config/gcloud/**"
+    - "/root/.azure/**"
+    - "/home/**/.azure/**"
+
+rules:
+  # Block cloud CLIs in containers (use IAM roles, not embedded creds)
+  - name: block-cloud-cli
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $cloud_clis }
+    action: deny
+    reason: "Cloud CLI blocked in container (use IAM roles instead)"
+
+  # Block reading AWS credential files
+  - name: block-aws-creds-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.aws/credentials" }
+        - operation: "read"
+    action: deny
+    reason: "AWS credential file access blocked"
+
+  - name: block-user-aws-creds
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/**/.aws/credentials" }
+        - operation: "read"
+    action: deny
+    reason: "User AWS credential file access blocked"
+
+  # Block GCP credential access
+  - name: block-gcp-creds
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.config/gcloud/**" }
+        - operation: "read"
+    action: deny
+    reason: "GCP credential access blocked"
+
+  # Block Azure credential access
+  - name: block-azure-creds
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.azure/**" }
+        - operation: "read"
+    action: deny
+    reason: "Azure credential access blocked"
+
+  # Block writing new cloud credential files (credential stuffing)
+  - name: block-aws-cred-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.aws/**" }
+        - operation: "write"
+    action: deny
+    reason: "AWS credential file write blocked"
+
+  - name: block-gcp-cred-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.config/gcloud/**" }
+        - operation: "write"
+    action: deny
+    reason: "GCP credential write blocked"
+
+  # Monitor HTTP client usage (SSRF detection)
+  - name: audit-http-clients
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $http_clients }
+    action: audit
+    reason: "HTTP client execution (monitor for SSRF to metadata service)"
+
+  # Block connections to link-local metadata address range
+  # Note: This works with warmor's network address matching when available
+  - name: block-metadata-port
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 80 }
+    action: log
+    reason: "HTTP connection (audit for metadata service SSRF)"
+
+  # Block access to Kubernetes-specific credential locations
+  - name: block-k8s-secrets
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/run/secrets/kubernetes.io/**" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to Kubernetes secrets"
+
+  # Block reading environment variables file (often contains cloud keys)
+  - name: block-environ-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/proc/*/environ" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root reading process environment (credential theft)"
+
+default_action: allow

@@ -1,0 +1,125 @@
+name: lateral-movement-detection
+version: 1
+description: "Detect and block lateral movement techniques across containers and hosts"
+
+variables:
+  remote_access_tools:
+    - "/usr/bin/ssh"
+    - "/usr/bin/sshpass"
+    - "/usr/bin/telnet"
+    - "/usr/bin/rsh"
+    - "/usr/bin/rlogin"
+    - "/usr/bin/psexec"
+  discovery_tools:
+    - "/usr/bin/nmap"
+    - "/usr/bin/masscan"
+    - "/usr/bin/ping"
+    - "/usr/bin/arp"
+    - "/usr/bin/netstat"
+    - "/usr/bin/ss"
+    - "/usr/sbin/arp-scan"
+    - "/usr/bin/traceroute"
+  credential_tools:
+    - "/usr/bin/mimipenguin"
+    - "/usr/bin/lazagne"
+    - "/usr/sbin/unshadow"
+    - "/usr/bin/john"
+    - "/usr/bin/hashcat"
+  lateral_ports:
+    - 22
+    - 23
+    - 135
+    - 139
+    - 445
+    - 3389
+    - 5985
+    - 5986
+
+rules:
+  # Block remote access tools from containers
+  - name: block-ssh-from-container
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $remote_access_tools }
+    action: deny
+    reason: "Remote access tool in container (lateral movement)"
+
+  # Block network discovery and scanning
+  - name: block-network-scanning
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $discovery_tools }
+    action: deny
+    reason: "Network discovery tool (reconnaissance for lateral movement)"
+
+  # Block credential harvesting tools
+  - name: block-credential-harvest
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $credential_tools }
+    action: deny
+    reason: "Credential harvesting tool (lateral movement preparation)"
+
+  # Block outbound connections to lateral movement ports
+  - name: block-lateral-ports
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: $lateral_ports }
+    action: deny
+    reason: "Outbound connection to lateral movement port"
+
+  # Detect reading of SSH keys (credential theft)
+  - name: detect-ssh-key-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.ssh/**" }
+        - operation: "read"
+    action: audit
+    reason: "Root SSH key access (credential theft for lateral movement)"
+
+  - name: detect-user-ssh-key-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/**/.ssh/id_*" }
+        - operation: "read"
+    action: audit
+    reason: "User SSH private key access (credential theft)"
+
+  # Block access to Kubernetes service account tokens (pod-to-pod lateral)
+  - name: block-k8s-token-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/run/secrets/kubernetes.io/serviceaccount/token" }
+        - operation: "read"
+    action: audit
+    reason: "Kubernetes service account token access (pod lateral movement)"
+
+  # Detect /etc/shadow access (password hash theft)
+  - name: detect-shadow-access
+    event: file
+    conditions:
+      all:
+        - path: { equals: "/etc/shadow" }
+        - operation: "read"
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root shadow file access (credential theft)"
+
+  # Detect internal port scanning (rapid connections to multiple ports)
+  - name: detect-high-port-scan
+    event: network
+    conditions:
+      all:
+        - remote_port: { gt: 1024 }
+        - remote_port: { lt: 10000 }
+    action: log
+    reason: "Connection to internal service port (potential scan)"
+
+default_action: allow

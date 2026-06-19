@@ -1,0 +1,151 @@
+name: reverse-shell-detection
+version: 1
+description: "Detect and block reverse shell techniques, webshells, and backdoor implants"
+
+variables:
+  shell_binaries:
+    - "/bin/bash"
+    - "/bin/sh"
+    - "/bin/zsh"
+    - "/bin/dash"
+    - "/usr/bin/bash"
+    - "/usr/bin/sh"
+    - "/usr/bin/zsh"
+  reverse_shell_tools:
+    - "/usr/bin/nc"
+    - "/usr/bin/ncat"
+    - "/usr/bin/socat"
+    - "/usr/bin/telnet"
+    - "/usr/bin/nmap"
+    - "/usr/bin/openssl"
+  scripting_engines:
+    - "/usr/bin/python"
+    - "/usr/bin/python3"
+    - "/usr/bin/perl"
+    - "/usr/bin/ruby"
+    - "/usr/bin/php"
+    - "/usr/local/bin/node"
+  webshell_paths:
+    - "/var/www/**/*.php"
+    - "/var/www/**/*.jsp"
+    - "/var/www/**/*.asp"
+    - "/opt/app/public/**"
+    - "/usr/share/nginx/html/**/*.php"
+  backdoor_ports:
+    - 4444
+    - 4445
+    - 5555
+    - 6666
+    - 1234
+    - 1337
+    - 31337
+    - 12345
+    - 54321
+    - 9001
+    - 9002
+
+rules:
+  # Block netcat/socat (primary reverse shell tools)
+  - name: block-netcat
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $reverse_shell_tools }
+    action: deny
+    reason: "Reverse shell tool execution blocked"
+
+  # Block scripting engines spawned by web server processes
+  - name: block-webserver-script-spawn
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $scripting_engines }
+        - uid: { any_of: [33, 48, 65534] }
+    action: deny
+    reason: "Script engine spawned by web server user (webshell indicator)"
+
+  # Block connections to known backdoor ports
+  - name: block-backdoor-ports
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: $backdoor_ports }
+    action: deny
+    reason: "Connection to known backdoor/C2 port"
+
+  # Block writing executable files into web directories (webshell upload)
+  - name: block-webshell-upload-php
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/www/**/*.php" }
+        - operation: "write"
+    action: deny
+    reason: "PHP file write to web directory (webshell upload)"
+
+  - name: block-webshell-upload-jsp
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/www/**/*.jsp" }
+        - operation: "write"
+    action: deny
+    reason: "JSP file write to web directory (webshell upload)"
+
+  # Block /dev/tcp bash trick (bash built-in reverse shell)
+  - name: block-dev-tcp
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/dev/tcp/**" }
+    action: deny
+    reason: "Bash /dev/tcp access (reverse shell technique)"
+
+  - name: block-dev-udp
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/dev/udp/**" }
+    action: deny
+    reason: "Bash /dev/udp access (reverse shell technique)"
+
+  # Block creation of FIFO pipes in /tmp (named pipe reverse shell)
+  - name: block-tmp-fifo
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/tmp/.*" }
+        - operation: "write"
+    action: log
+    reason: "Hidden file creation in /tmp (potential named pipe shell)"
+
+  # Detect cron-based persistence (reverse shell cron jobs)
+  - name: detect-cron-persistence
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/spool/cron/**" }
+        - operation: "write"
+    action: deny
+    reason: "Cron job creation (persistence/reverse shell scheduling)"
+
+  - name: detect-crontab-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/cron.*/**" }
+        - operation: "write"
+    action: deny
+    reason: "Cron directory write (persistence mechanism)"
+
+  # Block shell execution from web-accessible directories
+  - name: block-shell-from-webdir
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $shell_binaries }
+        - uid: { any_of: [33, 48, 65534] }
+    action: deny
+    reason: "Shell spawned by web server user (RCE indicator)"
+
+default_action: allow

@@ -1,0 +1,129 @@
+name: data-exfiltration-prevention
+version: 1
+description: "Prevent data exfiltration via network, DNS tunneling, and unauthorized file transfers"
+
+variables:
+  exfil_tools:
+    - "/usr/bin/curl"
+    - "/usr/bin/wget"
+    - "/usr/bin/scp"
+    - "/usr/bin/rsync"
+    - "/usr/bin/sftp"
+    - "/usr/bin/ftp"
+    - "/usr/bin/nc"
+    - "/usr/bin/ncat"
+    - "/usr/bin/socat"
+    - "/usr/bin/rclone"
+    - "/usr/bin/aws"
+    - "/usr/bin/gsutil"
+    - "/usr/bin/az"
+  dns_tunnel_tools:
+    - "/usr/bin/iodine"
+    - "/usr/bin/dnscat"
+    - "/usr/bin/dns2tcp"
+    - "/usr/bin/dnscapy"
+  archive_tools:
+    - "/usr/bin/tar"
+    - "/usr/bin/zip"
+    - "/usr/bin/gzip"
+    - "/usr/bin/bzip2"
+    - "/usr/bin/xz"
+    - "/usr/bin/7z"
+    - "/usr/bin/rar"
+  cloud_storage_ports:
+    - 443
+  sensitive_data_paths:
+    - "/var/lib/mysql/**"
+    - "/var/lib/postgresql/**"
+    - "/opt/app/data/**"
+    - "/etc/ssl/private/**"
+    - "/var/secrets/**"
+    - "/run/secrets/**"
+
+rules:
+  # Block known DNS tunneling tools
+  - name: block-dns-tunneling
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $dns_tunnel_tools }
+    action: deny
+    reason: "DNS tunneling tool (covert data exfiltration channel)"
+
+  # Block data transfer tools executed by non-root
+  - name: block-exfil-tools-nonroot
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $exfil_tools }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Data transfer tool by non-root user (exfiltration risk)"
+
+  # Block archiving sensitive data directories
+  - name: audit-archive-creation
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $archive_tools }
+    action: audit
+    reason: "Archive tool execution (potential data staging for exfiltration)"
+
+  # Block reading sensitive data from containers
+  - name: block-secrets-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/run/secrets/**" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to container secrets"
+
+  - name: block-var-secrets
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/secrets/**" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Non-root access to mounted secrets"
+
+  # Audit access to database data directories
+  - name: audit-db-data-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/lib/postgresql/**" }
+        - uid: { not: 999 }
+    action: audit
+    reason: "Non-postgres user accessing database files"
+
+  - name: audit-mysql-data-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/lib/mysql/**" }
+        - uid: { not: 999 }
+    action: audit
+    reason: "Non-mysql user accessing database files"
+
+  # Block outbound connections on non-standard high ports (C2/exfil channels)
+  - name: block-high-port-exfil
+    event: network
+    conditions:
+      all:
+        - remote_port: { gt: 8443 }
+        - remote_port: { lt: 65535 }
+    action: log
+    reason: "Outbound connection on high port (potential exfil channel)"
+
+  # Block raw socket creation (ICMP tunneling, custom protocols)
+  - name: block-icmp-exfil
+    event: network
+    conditions:
+      all:
+        - remote_port: { equals: 0 }
+    action: log
+    reason: "Raw socket or ICMP activity (potential tunnel)"
+
+default_action: allow
