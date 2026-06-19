@@ -1,6 +1,6 @@
 .PHONY: all clean build-bpf build-policy build-daemon generate test help \
 	deploy deploy-audit undeploy status logs policy-check upgrade \
-	docker-build docker-push
+	docker-build docker-push build-policy-merge build-policy-diff build-policy-bundle
 
 NAMESPACE ?= warmor-system
 RELEASE ?= warmor
@@ -71,6 +71,21 @@ build-policy:
 build-daemon:
 	@echo "==> Building warmor daemon..."
 	go build -o warmor-daemon ./cmd/warmor-daemon
+
+# Build policy merge tool
+build-policy-merge:
+	@echo "==> Building warmor-policy-merge..."
+	go build -o warmor-policy-merge ./cmd/warmor-policy-merge
+
+# Build policy diff tool
+build-policy-diff:
+	@echo "==> Building warmor-policy-diff..."
+	go build -o warmor-policy-diff ./cmd/warmor-policy-diff
+
+# Build policy bundle tool
+build-policy-bundle:
+	@echo "==> Building warmor-policy-bundle..."
+	go build -o warmor-policy-bundle ./cmd/warmor-policy-bundle
 
 # Build test tools
 build-tests:

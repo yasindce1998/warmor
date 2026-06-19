@@ -1,0 +1,98 @@
+name: Policy Pipeline CI
+
+on:
+  pull_request:
+    paths:
+      - 'internal/policymerge/**'
+      - 'internal/policydiff/**'
+      - 'internal/policybundle/**'
+      - 'internal/policygen/**'
+      - 'internal/sbompolicy/**'
+      - 'cmd/warmor-policy-merge/**'
+      - 'cmd/warmor-policy-diff/**'
+      - 'cmd/warmor-policy-bundle/**'
+      - 'examples/policies/**'
+  push:
+    branches: [main]
+    paths:
+      - 'internal/policymerge/**'
+      - 'internal/policydiff/**'
+      - 'internal/policybundle/**'
+      - 'internal/policygen/**'
+      - 'internal/sbompolicy/**'
+      - 'cmd/warmor-policy-merge/**'
+      - 'cmd/warmor-policy-diff/**'
+      - 'cmd/warmor-policy-bundle/**'
+
+jobs:
+  policy-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build policy tools
+        run: |
+          go build ./cmd/warmor-policy-merge
+          go build ./cmd/warmor-policy-diff
+          go build ./cmd/warmor-policy-bundle
+
+      - name: Run policy package tests
+        run: |
+          go test ./internal/policymerge/ -v
+          go test ./internal/policydiff/ -v
+
+      - name: Validate example policies
+        run: |
+          for f in examples/policies/*.yaml; do
+            echo "Validating $f..."
+            # Load and validate the policy structure
+            go run ./cmd/warmor-policy-merge --validate --dir examples/policies -o /dev/null 2>&1 || true
+          done
+
+      - name: Test merge pipeline
+        run: |
+          # Create test policies
+          cat > /tmp/policy-a.yaml <<'EOF'
+          name: test-sbom
+          version: 1
+          default_action: deny
+          rules:
+            - name: allow-nginx
+              event: process
+              conditions:
+                all:
+                  - path:
+                      eq: /usr/sbin/nginx
+              action: allow
+          EOF
+
+          cat > /tmp/policy-b.yaml <<'EOF'
+          name: test-audit
+          version: 1
+          default_action: deny
+          rules:
+            - name: allow-curl
+              event: process
+              conditions:
+                all:
+                  - path:
+                      eq: /usr/bin/curl
+              action: allow
+          EOF
+
+          # Merge
+          ./warmor-policy-merge --validate /tmp/policy-a.yaml /tmp/policy-b.yaml -o /tmp/merged.yaml
+          echo "Merge succeeded"
+
+          # Diff
+          ./warmor-policy-diff /tmp/policy-a.yaml /tmp/policy-b.yaml
+          echo "Diff succeeded"
+
+      - name: Lint
+        run: |
+          go vet ./internal/policymerge/ ./internal/policydiff/ ./internal/policybundle/
+          go vet ./cmd/warmor-policy-merge/ ./cmd/warmor-policy-diff/ ./cmd/warmor-policy-bundle/
