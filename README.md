@@ -39,6 +39,8 @@ sudo ./warmor-daemon --policy policy.yaml --lsm-enforce
 
 That's it. Your system is now enforcing security policy at the kernel level.
 
+> **First time?** See the [Getting Started Guide](GETTING_STARTED.md) for detailed setup instructions, dependency installation, and your first policy walkthrough.
+
 ---
 
 ## How It Works
