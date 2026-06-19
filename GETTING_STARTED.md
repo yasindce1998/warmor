@@ -69,6 +69,20 @@ sudo dnf install -y clang llvm libbpf-devel kernel-devel pkg-config
 # Go and Rust same as above
 ```
 
+#### Arch Linux
+
+```bash
+sudo pacman -Syu --noconfirm clang llvm libbpf linux-headers pkg-config base-devel
+
+# Go
+sudo pacman -S go
+
+# Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+rustup target add wasm32-wasi
+```
+
 #### Verify Everything is Installed
 
 ```bash
