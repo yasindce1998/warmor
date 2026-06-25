@@ -58,7 +58,7 @@ That's it. Your system is now enforcing security policy at the kernel level.
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Kernel hooks** intercept syscalls (LSM-BPF on Linux, ETW on Windows, ESF on macOS)
+1. **Kernel hooks** intercept syscalls (LSM-BPF on Linux, eBPF-for-Windows/ETW on Windows, ESF on macOS)
 2. **BPF policy map** handles cached decisions in-kernel (<1us) — no userspace round-trip
 3. **WASM sandbox** evaluates new events safely — policy bugs can't crash the system
 4. **Decisions feed back** into the kernel map, accelerating future identical events

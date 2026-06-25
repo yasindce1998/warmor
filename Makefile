@@ -9,6 +9,15 @@ POLICY ?= examples/policies/kubernetes-hardening.yaml
 IMAGE ?= ghcr.io/yasindce1998/warmor
 TAG ?= latest
 
+# Cross-platform support
+ifeq ($(OS),Windows_NT)
+    BINARY_EXT := .exe
+    RM := del /f /q
+else
+    BINARY_EXT :=
+    RM := rm -f
+endif
+
 # Default target
 all: build-bpf generate build-policy build-daemon
 
@@ -70,28 +79,28 @@ build-policy:
 # Build warmor daemon
 build-daemon:
 	@echo "==> Building warmor daemon..."
-	go build -o warmor-daemon ./cmd/warmor-daemon
+	go build -o warmor-daemon$(BINARY_EXT) ./cmd/warmor-daemon
 
 # Build policy merge tool
 build-policy-merge:
 	@echo "==> Building warmor-policy-merge..."
-	go build -o warmor-policy-merge ./cmd/warmor-policy-merge
+	go build -o warmor-policy-merge$(BINARY_EXT) ./cmd/warmor-policy-merge
 
 # Build policy diff tool
 build-policy-diff:
 	@echo "==> Building warmor-policy-diff..."
-	go build -o warmor-policy-diff ./cmd/warmor-policy-diff
+	go build -o warmor-policy-diff$(BINARY_EXT) ./cmd/warmor-policy-diff
 
 # Build policy bundle tool
 build-policy-bundle:
 	@echo "==> Building warmor-policy-bundle..."
-	go build -o warmor-policy-bundle ./cmd/warmor-policy-bundle
+	go build -o warmor-policy-bundle$(BINARY_EXT) ./cmd/warmor-policy-bundle
 
 # Build test tools
 build-tests:
 	@echo "==> Building test tools..."
-	go build -o test-ebpf ./cmd/test-ebpf
-	go build -o test-wasm ./cmd/test-wasm
+	go build -o test-ebpf$(BINARY_EXT) ./cmd/test-ebpf
+	go build -o test-wasm$(BINARY_EXT) ./cmd/test-wasm
 
 # Run tests
 test:
@@ -103,11 +112,11 @@ clean:
 	@echo "==> Cleaning build artifacts..."
 	cd bpf && $(MAKE) clean
 	cd policies/example && $(MAKE) clean
-	rm -f warmor-daemon test-ebpf test-wasm
-	rm -f internal/ebpf/execve_monitor_bpfeb.go
-	rm -f internal/ebpf/execve_monitor_bpfeb.o
-	rm -f internal/ebpf/execve_monitor_bpfel.go
-	rm -f internal/ebpf/execve_monitor_bpfel.o
+	$(RM) warmor-daemon$(BINARY_EXT) test-ebpf$(BINARY_EXT) test-wasm$(BINARY_EXT)
+	$(RM) internal/ebpf/execve_monitor_bpfeb.go
+	$(RM) internal/ebpf/execve_monitor_bpfeb.o
+	$(RM) internal/ebpf/execve_monitor_bpfel.go
+	$(RM) internal/ebpf/execve_monitor_bpfel.o
 	go clean
 
 # Install dependencies

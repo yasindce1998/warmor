@@ -76,7 +76,7 @@ Traditional security enforcers are platform-specific:
 | Platform | Status | Technology | Enforcement | Latency (P95) | Throughput |
 |----------|--------|------------|-------------|---------|------------|
 | **Linux** | ✅ Production | eBPF | ✅ Yes | <100μs | 100k+/sec |
-| **Windows** | 🚧 Beta | ETW + eBPF-for-Windows | ❌ Planned (eBPF mode) | <100μs | 100k+/sec |
+| **Windows** | 🚧 Beta | ETW + eBPF-for-Windows | ✅ Yes (eBPF mode) | <100μs | 100k+/sec |
 | **macOS** | 🚧 Beta | ESF | ✅ Yes (AUTH events) | <100μs | 100k+/sec |
 
 ---
@@ -338,10 +338,13 @@ Application → Syscall → ETW Provider → ETW Session → warmor Daemon → W
 Application → Syscall → eBPF Hook → Ring Buffer → warmor Daemon → WASM → Decision
 ```
 
-**Automatic Fallback:**
-1. Check for eBPF-for-Windows service (`ebpfsvc`)
-2. Attempt eBPF initialization
-3. Fall back to ETW if eBPF unavailable
+**Automatic Fallback (multi-step detection):**
+1. Check for eBPF-for-Windows service (`ebpfsvc`) via SCM
+2. Probe `\\.\ebpfctl` driver device
+3. Query `ebpfapi.dll` file version (VS_FIXEDFILEINFO)
+4. Verify API entry points (libbpf or legacy)
+5. Load eBPF programs and start ring buffer
+6. Fall back to ETW if any step fails
 
 **ETW Providers:**
 - `Microsoft-Windows-Kernel-Process` - Process events

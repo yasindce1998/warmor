@@ -4,6 +4,7 @@
 package etw
 
 import (
+	"encoding/binary"
 	"fmt"
 	"unsafe"
 
@@ -126,7 +127,16 @@ func StopFileTracing(sessionHandle windows.Handle, sessionName string) error {
 	return nil
 }
 
-// ParseFileEvent parses a file event from EVENT_RECORD
+// ParseFileEvent parses a file event from EVENT_RECORD.
+//
+// Microsoft-Windows-Kernel-File event layout:
+//   Event ID 10 (Create): uint64 FileObject, uint64 IrpPtr, uint32 TTID,
+//     uint32 CreateOptions, uint32 FileAttributes, uint32 ShareAccess,
+//     wstring OpenPath
+//   Event ID 11 (Read): uint64 FileObject, uint64 IrpPtr, uint32 TTID,
+//     uint64 Offset, uint32 IoSize, uint32 IoFlags
+//   Event ID 12 (Write): uint64 FileObject, uint64 IrpPtr, uint32 TTID,
+//     uint64 Offset, uint32 IoSize, uint32 IoFlags
 func ParseFileEvent(record *EVENT_RECORD) (*api.Event, error) {
 	ts := filetimeToTime(record.EventHeader.TimeStamp)
 	event := &api.Event{
@@ -135,7 +145,6 @@ func ParseFileEvent(record *EVENT_RECORD) (*api.Event, error) {
 		Timestamp: ts,
 	}
 
-	// Create FileEvent
 	fileEvent := &api.FileEvent{
 		BaseEvent: api.BaseEvent{
 			Type:      api.EventTypeFile,
@@ -144,24 +153,79 @@ func ParseFileEvent(record *EVENT_RECORD) (*api.Event, error) {
 		},
 	}
 
-	// Parse user data based on event ID
+	if record.UserDataLength == 0 || record.UserData == 0 {
+		event.File = fileEvent
+		return event, nil
+	}
+
+	data := unsafe.Slice((*byte)(unsafe.Pointer(record.UserData)), record.UserDataLength)
+
 	switch record.EventHeader.EventDescriptor.Id {
 	case EventTypeFileCreate:
 		fileEvent.Operation = "create"
-		if record.UserDataLength > 0 {
-			// TODO: Parse binary data structure
-			// For now, set placeholder values
-			fileEvent.Path = "C:\\Users\\user\\file.txt"
-			fileEvent.Flags = 0x80000000 // GENERIC_READ
+		parsed := parseFileCreateData(data)
+		if parsed != nil {
+			fileEvent.Path = parsed.FileName
+			fileEvent.Flags = parsed.Flags
 		}
+
 	case EventTypeFileRead:
 		fileEvent.Operation = "read"
-		fileEvent.Path = "C:\\Users\\user\\file.txt"
+		parsed := parseFileIOData(data)
+		if parsed != nil {
+			fileEvent.Path = parsed.FileName
+		}
+
 	case EventTypeFileWrite:
 		fileEvent.Operation = "write"
-		fileEvent.Path = "C:\\Users\\user\\file.txt"
+		parsed := parseFileIOData(data)
+		if parsed != nil {
+			fileEvent.Path = parsed.FileName
+		}
 	}
 
 	event.File = fileEvent
 	return event, nil
+}
+
+// parseFileCreateData extracts fields from a FileCreate event.
+// Layout: FileObject(8) + IrpPtr(8) + TTID(4) + CreateOptions(4) +
+//         FileAttributes(4) + ShareAccess(4) + OpenPath(wstring)
+func parseFileCreateData(data []byte) *FileEventData {
+	// Minimum: 8+8+4+4+4+4 = 32 bytes before the path string
+	if len(data) < 32 {
+		return nil
+	}
+
+	result := &FileEventData{
+		FileObject:     binary.LittleEndian.Uint64(data[0:8]),
+		Flags:          binary.LittleEndian.Uint32(data[20:24]),
+		FileAttributes: binary.LittleEndian.Uint32(data[24:28]),
+		ShareAccess:    binary.LittleEndian.Uint32(data[28:32]),
+	}
+
+	// OpenPath follows the fixed-size fields as a null-terminated UTF-16LE string
+	if len(data) > 32 {
+		result.FileName, _ = readUTF16String(data[32:])
+	}
+
+	return result
+}
+
+// parseFileIOData extracts fields from a FileRead/FileWrite event.
+// Layout: FileObject(8) + IrpPtr(8) + TTID(4) + Offset(8) + IoSize(4) + IoFlags(4)
+// The path is not included in read/write events; it requires correlation with create.
+func parseFileIOData(data []byte) *FileEventData {
+	if len(data) < 20 {
+		return nil
+	}
+
+	result := &FileEventData{
+		FileObject: binary.LittleEndian.Uint64(data[0:8]),
+	}
+
+	// Read/write events don't carry the file path directly.
+	// The path would need to be correlated via FileObject from a prior Create event.
+	// For now we record the file object for correlation.
+	return result
 }

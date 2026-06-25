@@ -5,6 +5,8 @@ package etw
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"syscall"
 	"unsafe"
 
@@ -64,27 +66,169 @@ func DetectEBPFForWindows() (*EBPFAvailability, error) {
 	serviceRunning, err := isServiceRunning("ebpfsvc")
 	if err != nil {
 		result.ErrorMessage = fmt.Sprintf("Failed to check ebpfsvc service: %v", err)
-		return result, nil // Return result, not error (service might not exist)
+		return result, nil
 	}
-
 	result.ServiceRunning = serviceRunning
 
-	// Step 2: Check if eBPF driver is loaded
-	// TODO: Implement driver check via DeviceIoControl
-	// For now, assume if service is running, driver is loaded
+	// Step 2: Check if the eBPF driver is loaded by probing the device path
 	if serviceRunning {
-		result.DriverLoaded = true
+		result.DriverLoaded = probeEBPFDriver()
 	}
 
-	// Step 3: Try to load a test eBPF program (future enhancement)
-	// This would verify that eBPF is actually functional
-	// For now, we consider it available if service is running
-	if serviceRunning {
-		result.Available = true
-		result.Version = "unknown" // TODO: Query actual version
+	// Step 3: Get version from ebpfapi.dll file metadata
+	result.Version = queryEBPFDLLVersion()
+
+	// Step 4: Verify ebpfapi.dll can actually be loaded
+	if serviceRunning && result.DriverLoaded {
+		if verifyEBPFAPI() {
+			result.Available = true
+		} else {
+			result.ErrorMessage = "ebpfapi.dll could not be loaded or has no usable API"
+		}
+	} else if serviceRunning && !result.DriverLoaded {
+		result.ErrorMessage = "eBPF service running but driver device not accessible"
+	} else {
+		result.ErrorMessage = "ebpfsvc service is not running"
 	}
 
 	return result, nil
+}
+
+// probeEBPFDriver checks if the eBPF driver device is accessible.
+// The driver exposes \\.\ebpfctl when loaded.
+func probeEBPFDriver() bool {
+	devicePath, _ := syscall.UTF16PtrFromString(`\\.\ebpfctl`)
+	handle, err := windows.CreateFile(
+		devicePath,
+		0, // no access needed, just check it opens
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
+		nil,
+		windows.OPEN_EXISTING,
+		0,
+		0,
+	)
+	if err != nil {
+		return false
+	}
+	windows.CloseHandle(handle)
+	return true
+}
+
+// queryEBPFDLLVersion reads the file version info from ebpfapi.dll.
+func queryEBPFDLLVersion() string {
+	// Look in System32 first, then PATH
+	sys32 := filepath.Join(os.Getenv("SystemRoot"), "System32", "ebpfapi.dll")
+	paths := []string{sys32}
+
+	// Also check common install location
+	progFiles := os.Getenv("ProgramFiles")
+	if progFiles != "" {
+		paths = append(paths, filepath.Join(progFiles, "ebpf-for-windows", "ebpfapi.dll"))
+	}
+
+	for _, path := range paths {
+		if v := getFileVersion(path); v != "" {
+			return v
+		}
+	}
+	return "unknown"
+}
+
+// getFileVersion reads the VS_FIXEDFILEINFO version from a DLL.
+func getFileVersion(path string) string {
+	version32 := windows.NewLazySystemDLL("version.dll")
+	getFileVersionInfoSize := version32.NewProc("GetFileVersionInfoSizeW")
+	getFileVersionInfo := version32.NewProc("GetFileVersionInfoW")
+	verQueryValue := version32.NewProc("VerQueryValueW")
+
+	if err := version32.Load(); err != nil {
+		return ""
+	}
+
+	pathPtr, _ := syscall.UTF16PtrFromString(path)
+
+	size, _, _ := getFileVersionInfoSize.Call(
+		uintptr(unsafe.Pointer(pathPtr)),
+		0,
+	)
+	if size == 0 {
+		return ""
+	}
+
+	data := make([]byte, size)
+	ret, _, _ := getFileVersionInfo.Call(
+		uintptr(unsafe.Pointer(pathPtr)),
+		0,
+		size,
+		uintptr(unsafe.Pointer(&data[0])),
+	)
+	if ret == 0 {
+		return ""
+	}
+
+	// Query the root block for VS_FIXEDFILEINFO
+	subBlock, _ := syscall.UTF16PtrFromString(`\`)
+	var infoPtr uintptr
+	var infoLen uint32
+	ret, _, _ = verQueryValue.Call(
+		uintptr(unsafe.Pointer(&data[0])),
+		uintptr(unsafe.Pointer(subBlock)),
+		uintptr(unsafe.Pointer(&infoPtr)),
+		uintptr(unsafe.Pointer(&infoLen)),
+	)
+	if ret == 0 || infoLen == 0 {
+		return ""
+	}
+
+	type VS_FIXEDFILEINFO struct {
+		Signature        uint32
+		StrucVersion     uint32
+		FileVersionMS    uint32
+		FileVersionLS    uint32
+		ProductVersionMS uint32
+		ProductVersionLS uint32
+		FileFlagsMask    uint32
+		FileFlags        uint32
+		FileOS           uint32
+		FileType         uint32
+		FileSubtype      uint32
+		FileDateMS       uint32
+		FileDateLS       uint32
+	}
+
+	info := (*VS_FIXEDFILEINFO)(unsafe.Pointer(infoPtr))
+	if info.Signature != 0xFEEF04BD {
+		return ""
+	}
+
+	major := info.FileVersionMS >> 16
+	minor := info.FileVersionMS & 0xFFFF
+	patch := info.FileVersionLS >> 16
+	build := info.FileVersionLS & 0xFFFF
+
+	return fmt.Sprintf("%d.%d.%d.%d", major, minor, patch, build)
+}
+
+// verifyEBPFAPI checks that ebpfapi.dll can be loaded and has at least
+// one recognized API entry point.
+func verifyEBPFAPI() bool {
+	dll := windows.NewLazySystemDLL("ebpfapi.dll")
+	if err := dll.Load(); err != nil {
+		return false
+	}
+
+	// Check for either libbpf or legacy API
+	libbpf := dll.NewProc("bpf_object__open")
+	if err := libbpf.Find(); err == nil {
+		return true
+	}
+
+	legacy := dll.NewProc("ebpf_load_program")
+	if err := legacy.Find(); err == nil {
+		return true
+	}
+
+	return false
 }
 
 // isServiceRunning checks if a Windows service is running

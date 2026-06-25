@@ -4,8 +4,10 @@
 package etw
 
 import (
+	"encoding/binary"
 	"fmt"
 	"time"
+	"unicode/utf16"
 	"unsafe"
 
 	"github.com/yasindce1998/warmor/pkg/api"
@@ -318,30 +320,143 @@ func filetimeToTime(ft int64) time.Time {
 	return time.Unix(sec, nsec).UTC()
 }
 
-// ParseProcessEvent parses a process event from EVENT_RECORD
+// ParseProcessEvent parses a process event from an ETW EVENT_RECORD.
+//
+// Microsoft-Windows-Kernel-Process event layout:
+//   Event ID 1 (ProcessStart): uint32 ProcessID, uint32 ParentProcessID,
+//     uint32 SessionID, int32 ExitStatus, variable-length SID, uint32 Flags,
+//     wstring ImageFileName, wstring CommandLine
+//   Event ID 2 (ProcessStop): uint32 ProcessID, uint32 ParentProcessID,
+//     int32 ExitStatus, uint64 CreateTime, uint64 ExitTime
 func ParseProcessEvent(record *EVENT_RECORD) (*api.Event, error) {
+	ts := filetimeToTime(record.EventHeader.TimeStamp)
 	event := &api.Event{
 		Type:      api.EventTypeProcess,
 		PID:       record.EventHeader.ProcessId,
-		Timestamp: filetimeToTime(record.EventHeader.TimeStamp),
+		Timestamp: ts,
 	}
 
-	// Parse user data based on event ID
+	if record.UserDataLength == 0 || record.UserData == 0 {
+		return event, nil
+	}
+
+	data := unsafe.Slice((*byte)(unsafe.Pointer(record.UserData)), record.UserDataLength)
+
 	switch record.EventHeader.EventDescriptor.Id {
 	case EventTypeProcessStart:
-		// Parse process start data
-		// UserData contains: ProcessID, ParentProcessID, SessionID, ImageFileName, CommandLine
-		if record.UserDataLength > 0 {
-			// TODO: Parse binary data structure
-			// For now, set placeholder values
-			event.Comm = "process.exe"
-			event.Filename = "C:\\Windows\\System32\\process.exe"
+		parsed := parseProcessStartData(data)
+		if parsed != nil {
+			event.PID = parsed.ProcessID
+			event.Comm = parsed.ImageFileName
+			event.Filename = parsed.ImageFileName
+			event.Process = &api.ProcessEvent{
+				BaseEvent: api.BaseEvent{
+					Type:      api.EventTypeProcess,
+					PID:       parsed.ProcessID,
+					Timestamp: ts,
+				},
+				Filename: parsed.ImageFileName,
+			}
 		}
+
 	case EventTypeProcessStop:
-		// Parse process stop data
-		event.Comm = "process.exe"
-		event.Filename = "C:\\Windows\\System32\\process.exe"
+		parsed := parseProcessStopData(data)
+		if parsed != nil {
+			event.PID = parsed.ProcessID
+			event.Comm = parsed.ImageFileName
+			event.Filename = parsed.ImageFileName
+		}
 	}
 
 	return event, nil
+}
+
+// parseProcessStartData extracts fields from a ProcessStart event payload.
+func parseProcessStartData(data []byte) *ProcessEventData {
+	if len(data) < 16 {
+		return nil
+	}
+
+	result := &ProcessEventData{
+		ProcessID:       binary.LittleEndian.Uint32(data[0:4]),
+		ParentProcessID: binary.LittleEndian.Uint32(data[4:8]),
+		SessionID:       binary.LittleEndian.Uint32(data[8:12]),
+		ExitStatus:      int32(binary.LittleEndian.Uint32(data[12:16])),
+	}
+
+	offset := 16
+
+	// Skip the SID structure if present (TOKEN_USER format: revision + sub-authority count)
+	if offset < len(data) {
+		sidRevision := data[offset]
+		if sidRevision == 1 && offset+1 < len(data) {
+			subAuthCount := data[offset+1]
+			sidLen := 8 + int(subAuthCount)*4
+			offset += sidLen
+		}
+	}
+
+	// Skip Flags (uint32) if present
+	if offset+4 <= len(data) {
+		offset += 4
+	}
+
+	// Read ImageFileName as null-terminated UTF-16LE
+	if offset < len(data) {
+		imgName, consumed := readUTF16String(data[offset:])
+		result.ImageFileName = imgName
+		offset += consumed
+	}
+
+	// Read CommandLine as null-terminated UTF-16LE
+	if offset < len(data) {
+		cmdLine, _ := readUTF16String(data[offset:])
+		result.CommandLine = cmdLine
+	}
+
+	return result
+}
+
+// parseProcessStopData extracts fields from a ProcessStop event payload.
+func parseProcessStopData(data []byte) *ProcessEventData {
+	if len(data) < 12 {
+		return nil
+	}
+
+	result := &ProcessEventData{
+		ProcessID:       binary.LittleEndian.Uint32(data[0:4]),
+		ParentProcessID: binary.LittleEndian.Uint32(data[4:8]),
+		ExitStatus:      int32(binary.LittleEndian.Uint32(data[8:12])),
+	}
+
+	// Image name may follow after timestamps (2x uint64 = 16 bytes)
+	offset := 12
+	if offset+16 <= len(data) {
+		offset += 16
+	}
+	if offset < len(data) {
+		imgName, _ := readUTF16String(data[offset:])
+		result.ImageFileName = imgName
+	}
+
+	return result
+}
+
+// readUTF16String reads a null-terminated UTF-16LE string from a byte slice.
+// Returns the decoded string and the number of bytes consumed (including the null terminator).
+func readUTF16String(data []byte) (string, int) {
+	if len(data) < 2 {
+		return "", 0
+	}
+
+	var u16s []uint16
+	for i := 0; i+1 < len(data); i += 2 {
+		ch := binary.LittleEndian.Uint16(data[i : i+2])
+		if ch == 0 {
+			return string(utf16.Decode(u16s)), i + 2
+		}
+		u16s = append(u16s, ch)
+	}
+
+	return string(utf16.Decode(u16s)), len(data) &^ 1
 }

@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/yasindce1998/warmor/internal/enforcer"
@@ -149,7 +147,12 @@ func main() {
 
 	// Set up signal handling
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	notifySignals(sigChan)
+
+	// Start policy file watcher (active on Windows; no-op on Unix where SIGHUP is used)
+	reloadCh := make(chan struct{}, 1)
+	stopWatcher := startPolicyWatcher(*policyPath, reloadCh)
+	defer stopWatcher()
 
 	// Print stats periodically
 	statsTicker := time.NewTicker(*statsInterval)
@@ -161,18 +164,14 @@ func main() {
 	for {
 		select {
 		case sig := <-sigChan:
-			switch sig {
-			case syscall.SIGHUP:
-				// Reload policy on SIGHUP
+			if isReloadSignal(sig) {
 				log.Println("")
-				log.Println("📥 Received SIGHUP signal, reloading policy...")
+				log.Println("📥 Received reload signal, reloading policy...")
 				if err := enf.ReloadPolicy(); err != nil {
 					log.Printf("❌ Failed to reload policy: %v", err)
 				}
 				log.Println("")
-
-			case os.Interrupt, syscall.SIGTERM:
-				// Shutdown on SIGINT/SIGTERM
+			} else if isShutdownSignal(sig) {
 				log.Println("")
 				log.Println("📥 Received shutdown signal")
 				enf.Stop()
@@ -183,6 +182,14 @@ func main() {
 				log.Println("👋 warmor shutdown complete")
 				return
 			}
+
+		case <-reloadCh:
+			log.Println("")
+			log.Println("📥 Policy file changed, reloading...")
+			if err := enf.ReloadPolicy(); err != nil {
+				log.Printf("❌ Failed to reload policy: %v", err)
+			}
+			log.Println("")
 
 		case <-statsTicker.C:
 			log.Println("")

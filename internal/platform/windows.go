@@ -19,12 +19,13 @@ const (
 )
 
 // WindowsPlatform implements Platform for Windows using ETW
-// Future: Add eBPF-for-Windows support with automatic fallback
+// with optional eBPF-for-Windows support and automatic fallback
 type WindowsPlatform struct {
 	etwConsumer *etw.Consumer
+	ebpfLoader  *etw.EBPFLoader
 	eventChan   chan<- *api.Event
 	stopChan    chan struct{}
-	mode        string // "etw" or "ebpf" (future)
+	mode        string // "etw" or "ebpf"
 }
 
 // NewWindowsPlatform creates a new Windows platform
@@ -87,18 +88,42 @@ func (p *WindowsPlatform) Load(ctx context.Context) error {
 }
 
 func (p *WindowsPlatform) Start(ctx context.Context, eventChan chan<- *api.Event) error {
+	p.eventChan = eventChan
+
+	// eBPF mode
+	if p.mode == ModeEBPF && p.ebpfLoader != nil {
+		if err := p.ebpfLoader.Start(ctx, eventChan); err != nil {
+			return fmt.Errorf("start eBPF loader: %w", err)
+		}
+
+		log.Println("Enabling eBPF process monitoring...")
+		if err := p.ebpfLoader.EnableProcessMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable eBPF process monitoring: %v", err)
+		}
+
+		log.Println("Enabling eBPF file monitoring...")
+		if err := p.ebpfLoader.EnableFileMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable eBPF file monitoring: %v", err)
+		}
+
+		log.Println("Enabling eBPF network monitoring...")
+		if err := p.ebpfLoader.EnableNetworkMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable eBPF network monitoring: %v", err)
+		}
+
+		log.Println("Windows platform started successfully (eBPF mode)")
+		return nil
+	}
+
+	// ETW mode
 	if p.etwConsumer == nil {
 		return fmt.Errorf("platform not loaded")
 	}
 
-	p.eventChan = eventChan
-
-	// Start ETW consumer
 	if err := p.etwConsumer.Start(ctx, eventChan); err != nil {
 		return fmt.Errorf("start ETW consumer: %w", err)
 	}
 
-	// Enable monitoring for different event types
 	log.Println("Enabling process monitoring...")
 	if err := p.etwConsumer.EnableProcessMonitoring(); err != nil {
 		log.Printf("Warning: Failed to enable process monitoring: %v", err)
@@ -114,12 +139,15 @@ func (p *WindowsPlatform) Start(ctx context.Context, eventChan chan<- *api.Event
 		log.Printf("Warning: Failed to enable network monitoring: %v", err)
 	}
 
-	log.Println("Windows platform started successfully")
+	log.Println("Windows platform started successfully (ETW mode)")
 	return nil
 }
 
 func (p *WindowsPlatform) Stop() error {
 	close(p.stopChan)
+	if p.ebpfLoader != nil {
+		return p.ebpfLoader.Stop()
+	}
 	if p.etwConsumer != nil {
 		return p.etwConsumer.Stop()
 	}
@@ -127,6 +155,9 @@ func (p *WindowsPlatform) Stop() error {
 }
 
 func (p *WindowsPlatform) Close() error {
+	if p.ebpfLoader != nil {
+		return p.ebpfLoader.Stop()
+	}
 	if p.etwConsumer != nil {
 		return p.etwConsumer.Stop()
 	}
@@ -134,7 +165,14 @@ func (p *WindowsPlatform) Close() error {
 }
 
 func (p *WindowsPlatform) Capabilities() Capabilities {
-	// ETW provides monitoring but limited enforcement
+	if p.mode == ModeEBPF {
+		return Capabilities{
+			ProcessMonitoring: true,
+			FileMonitoring:    true,
+			NetworkMonitoring: true,
+			Enforcement:       true, // eBPF can enforce via program return codes
+		}
+	}
 	return Capabilities{
 		ProcessMonitoring: true,  // ETW process events
 		FileMonitoring:    true,  // ETW file events (limited)
@@ -145,16 +183,17 @@ func (p *WindowsPlatform) Capabilities() Capabilities {
 
 // initializeEBPF initializes eBPF-for-Windows monitoring
 func (p *WindowsPlatform) initializeEBPF(ctx context.Context) error {
-	// TODO: Implement eBPF-for-Windows initialization
-	// This will be implemented in a future phase when eBPF-for-Windows is production-ready
-	//
-	// Steps:
-	// 1. Load eBPF programs (similar to Linux implementation)
-	// 2. Attach to hook points
-	// 3. Set up event channels
-	// 4. Start event processing
+	loader, err := etw.NewEBPFLoader("")
+	if err != nil {
+		return fmt.Errorf("create eBPF loader: %w", err)
+	}
 
-	return fmt.Errorf("eBPF-for-Windows initialization not yet implemented")
+	if err := loader.Load(ctx); err != nil {
+		return fmt.Errorf("load eBPF programs: %w", err)
+	}
+
+	p.ebpfLoader = loader
+	return nil
 }
 
 // PolicyMap returns nil — Windows does not support LSM-BPF.

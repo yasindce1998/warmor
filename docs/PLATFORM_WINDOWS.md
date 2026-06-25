@@ -1,21 +1,22 @@
 # Windows Platform Guide
 
 **Status:** 🚧 EXPERIMENTAL/BETA  
-**Implementation:** ETW (Event Tracing for Windows)  
-**Version:** 1.1.0-beta  
-**Last Updated:** June 1, 2026
+**Implementation:** eBPF-for-Windows (primary) + ETW (fallback)  
+**Version:** 2.0-beta  
+**Last Updated:** June 25, 2026
 
 ---
 
 ## ⚠️ Important Notice
 
 **Windows support is currently in EXPERIMENTAL/BETA status:**
-- ✅ ETW-based monitoring implemented
-- ✅ Process, file, and network event collection
+- ✅ eBPF-for-Windows integration with full program loading and ring buffer events
+- ✅ ETW-based monitoring as automatic fallback
+- ✅ Process, file, and network event collection with real binary parsing
+- ✅ Enforcement capabilities (eBPF mode)
+- ✅ Multi-step detection: service check, driver probe, DLL version query, API verification
 - ⚠️ Limited testing on production systems
 - ⚠️ Performance characteristics not fully validated
-- ❌ No enforcement capabilities (monitoring only)
-- 🚧 eBPF-for-Windows integration planned for future
 
 **Use in production at your own risk. Recommended for testing and evaluation only.**
 
@@ -38,8 +39,8 @@
                  ▼
 ┌─────────────────────────────────────┐
 │    Windows Platform (windows.go)    │
-│    - ETW integration (current)      │
-│    - eBPF-for-Windows (future)      │
+│    - eBPF-for-Windows (primary)     │
+│    - ETW integration (fallback)     │
 │    - Automatic fallback             │
 └─────────────────────────────────────┘
                  │
@@ -63,22 +64,23 @@
 ## Current Implementation Status
 
 ### ✅ Implemented Features
-- **ETW Consumer Framework** - Complete ETW session management
-- **Process Monitoring** - Process creation/termination events
-- **File Monitoring** - File create/read/write events
-- **Network Monitoring** - TCP/UDP connection events
-- **Platform Abstraction** - Clean interface for future enhancements
+- **eBPF-for-Windows Integration** - Full program loading, ring buffer event delivery, enforcement
+- **Multi-Step Detection** - Service check → driver probe → DLL version query → API verification
+- **ETW Consumer Framework** - Complete ETW session management (automatic fallback)
+- **Process Monitoring** - Process creation/termination with binary event parsing (PID, PPID, SID, image name, command line)
+- **File Monitoring** - File create/read/write with binary parsing (file object, path, flags, attributes)
+- **Network Monitoring** - TCP/UDP with full binary parsing (IPv4/IPv6, local/remote addr+port)
+- **Platform Abstraction** - Clean interface with dual-mode architecture
 - **WASM Integration** - Cross-platform policy evaluation
-- **eBPF-for-Windows Support** - Automatic detection and fallback
 - **Dual-Mode Architecture** - eBPF + ETW with graceful fallback
+- **Enforcement** - Can block operations in eBPF mode
 
 ### 🚧 In Progress
-- **Event Parsing** - Binary data structure parsing (placeholder values currently)
 - **Performance Optimization** - Buffer tuning and event filtering
 - **Error Handling** - Comprehensive error recovery
-- **eBPF Programs** - Requires eBPF-for-Windows SDK and compilation
+- **File Path Correlation** - Read/write events need FileObject-to-path mapping
 
-### ❌ Not Implemented (ETW Mode)
+### ❌ Not Implemented (ETW Mode Only)
 - **Enforcement** - Cannot block operations (ETW is monitoring only)
 - **Advanced Filtering** - Event-level filtering
 - **Container Support** - Windows Container monitoring
@@ -218,9 +220,9 @@ sc.exe delete Warmor
 **Captured Data:**
 - Process ID (PID)
 - Parent Process ID (PPID)
-- User SID (TODO: parse from event)
+- User SID
 - Executable path
-- Command line arguments (TODO: parse from event)
+- Command line arguments
 - Creation time
 
 **Example Event:**
@@ -241,7 +243,7 @@ sc.exe delete Warmor
 
 **Captured Data:**
 - Process ID
-- User SID (TODO)
+- User SID
 - File path
 - Operation type (create, read, write)
 - Access flags
@@ -267,10 +269,12 @@ sc.exe delete Warmor
 
 **Captured Data:**
 - Process ID
-- User SID (TODO)
-- Local address/port (TODO)
+- Local address/port
 - Remote address/port
 - Protocol (TCP/UDP)
+- IPv4 and IPv6 support (including IPv4-mapped IPv6 detection)
+
+**Binary Parsing:** Full binary payload parsing with support for version 2 events (connId prefix). IPv4 vs IPv6 is determined by remaining payload size after fixed headers (12 bytes = IPv4, 36 bytes = IPv6). Ports are in network byte order (big-endian).
 
 **Example Event:**
 ```json
@@ -282,7 +286,8 @@ sc.exe delete Warmor
     "operation": "connect",
     "protocol": "tcp",
     "remote_addr": "192.168.1.100",
-    "remote_port": 443
+    "remote_port": 443,
+    "local_port": 52341
   },
   "timestamp": "2026-06-01T12:00:00Z"
 }
@@ -290,6 +295,17 @@ sc.exe delete Warmor
 
 ## Platform Capabilities
 
+**eBPF Mode:**
+```go
+Capabilities{
+    ProcessMonitoring: true,   // ✅ eBPF process hooks
+    FileMonitoring:    true,   // ✅ eBPF file hooks
+    NetworkMonitoring: true,   // ✅ eBPF network hooks
+    Enforcement:       true,   // ✅ Can block via program return codes
+}
+```
+
+**ETW Mode (fallback):**
 ```go
 Capabilities{
     ProcessMonitoring: true,   // ✅ ETW process events
@@ -301,12 +317,17 @@ Capabilities{
 
 ## Limitations
 
-### Current Limitations
+### Current Limitations (ETW Mode)
 1. **No Enforcement** - Cannot block operations (ETW limitation)
 2. **Monitoring Only** - Can log/alert but not prevent
-3. **Placeholder Parsing** - Some event fields use placeholder values
-4. **No Container Support** - Windows Container monitoring not implemented
-5. **Performance** - ETW has higher overhead than eBPF
+3. **No Container Support** - Windows Container monitoring not implemented
+4. **Performance** - ETW has higher overhead than eBPF
+
+### Current Limitations (eBPF Mode)
+1. **Requires eBPF-for-Windows** - Must be installed and running
+2. **Limited Hook Points** - Fewer hook points compared to Linux eBPF
+3. **Windows-Specific Parsing** - Some event context differs from Linux
+4. **File Path Correlation** - Read/write events reference FileObject, not path
 
 ### ETW-Specific Limitations
 - **Asynchronous** - Events delivered with slight delay
@@ -352,7 +373,18 @@ Get-NetFirewallRule -DisplayName "Warmor Metrics"
 
 ### Status: ✅ Implemented (Experimental)
 
-warmor includes **preliminary eBPF-for-Windows detection** with automatic fallback to ETW. Full eBPF enforcement support is planned for a future release.
+warmor includes **full eBPF-for-Windows integration** with automatic fallback to ETW. When eBPF-for-Windows is detected and operational, warmor uses it as the primary monitoring and enforcement engine. If unavailable, it falls back to ETW seamlessly.
+
+### Detection Pipeline
+
+The detection process is multi-step validation to ensure eBPF-for-Windows is truly operational:
+
+1. **Service Check** — Query `ebpfsvc` via the Service Control Manager
+2. **Driver Probe** — Open `\\.\ebpfctl` device to confirm the kernel driver is loaded
+3. **DLL Version Query** — Read `VS_FIXEDFILEINFO` from `ebpfapi.dll` (searches System32 and Program Files)
+4. **API Verification** — Load `ebpfapi.dll` and check for known entry points (`bpf_object__open` for libbpf API, or `ebpf_load_program` for legacy API)
+
+All four checks must pass for eBPF mode to activate.
 
 ### Architecture
 
@@ -362,7 +394,9 @@ warmor includes **preliminary eBPF-for-Windows detection** with automatic fallba
 │  ┌───────────────────────────────┐  │
 │  │  1. Detect eBPF-for-Windows   │  │
 │  │     - Check ebpfsvc service   │  │
-│  │     - Verify driver loaded    │  │
+│  │     - Probe \\.\ebpfctl       │  │
+│  │     - Query DLL version       │  │
+│  │     - Verify API entry points │  │
 │  └───────────────────────────────┘  │
 │              │                      │
 │              ▼                      │
@@ -370,7 +404,8 @@ warmor includes **preliminary eBPF-for-Windows detection** with automatic fallba
 │  │  2. Try eBPF Mode             │  │
 │  │     - Load eBPF programs      │  │
 │  │     - Attach to hooks         │  │
-│  │     - Start event processing  │  │
+│  │     - Start ring buffer poll  │  │
+│  │     - Enable enforcement      │  │
 │  └───────────────────────────────┘  │
 │              │ (on failure)         │
 │              ▼                      │
@@ -606,7 +641,6 @@ sc.exe query ebpfsvc
 - ⚠️ Some Windows-specific context parsing needed
 
 **Current Implementation Limitations:**
-- 🚧 Event parsing uses placeholder values (TODO: complete)
 - 🚧 Some hook points not yet implemented
 - 🚧 Performance not fully optimized
 - 🚧 Limited testing on production workloads
@@ -726,19 +760,22 @@ logman query "WarmorETWSession" -ets
 
 ## Roadmap
 
-### Phase 7.1 (Current - Beta)
+### Phase 7.1 (Complete)
 - [x] ETW consumer framework
 - [x] Process monitoring
 - [x] File monitoring
 - [x] Network monitoring
-- [ ] Complete event parsing
+- [x] Binary event parsing (process, file, network)
+- [x] IPv4/IPv6 network address extraction
 - [ ] Performance optimization
 - [ ] Production testing
 
-### Phase 7.2 (Future)
-- [ ] eBPF-for-Windows integration
-- [ ] Automatic fallback (eBPF → ETW)
-- [ ] Enforcement capabilities
+### Phase 7.2 (Complete)
+- [x] eBPF-for-Windows integration
+- [x] Automatic fallback (eBPF → ETW)
+- [x] Enforcement capabilities (eBPF mode)
+- [x] Multi-step detection (service, driver, DLL version, API)
+- [x] Ring buffer event delivery
 - [ ] Advanced event filtering
 - [ ] Container support
 
@@ -755,9 +792,9 @@ To contribute to Windows support:
 
 1. **Test Beta Implementation** - Report bugs and issues
 2. **Performance Testing** - Benchmark on different workloads
-3. **Event Parsing** - Help complete binary data parsing
+3. **Event Parsing** - Extend binary parsing with additional event types
 4. **Documentation** - Improve this guide
-5. **eBPF Integration** - Help integrate eBPF-for-Windows when ready
+5. **eBPF Programs** - Contribute additional eBPF programs for Windows hook points
 
 ## References
 
