@@ -177,7 +177,7 @@ func (p *WindowsPlatform) Capabilities() Capabilities {
 		ProcessMonitoring: true,  // ETW process events
 		FileMonitoring:    true,  // ETW file events (limited)
 		NetworkMonitoring: true,  // ETW network events
-		Enforcement:       false, // ETW is monitoring only, no blocking
+		Enforcement:       true, // Post-facto enforcement via Win32 TerminateProcess
 	}
 }
 

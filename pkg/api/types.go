@@ -90,6 +90,7 @@ type NetworkEvent struct {
 	Protocol   string `json:"protocol"`    // "tcp", "udp"
 	RemoteAddr string `json:"remote_addr"` // IP address
 	RemotePort uint16 `json:"remote_port"`
+	LocalAddr  string `json:"local_addr,omitempty"`
 	LocalPort  uint16 `json:"local_port,omitempty"`
 	DataSize   uint32 `json:"data_size,omitempty"`
 }

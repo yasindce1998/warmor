@@ -3,6 +3,7 @@ package enforcer
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync/atomic"
 
 	"github.com/yasindce1998/warmor/pkg/api"
@@ -52,11 +53,29 @@ func (h *ActionHandler) handleAllow(_ *api.Event, _ *api.ActionResult) error {
 	return nil
 }
 
-func (h *ActionHandler) handleDeny(_ *api.Event, _ *api.ActionResult) error {
+func (h *ActionHandler) handleDeny(event *api.Event, result *api.ActionResult) error {
+	if event.PID == 0 {
+		return nil
+	}
+
+	log.Printf("DENY pid=%d type=%s reason=%q", event.PID, event.Type, result.Reason)
+
+	if err := terminateProcess(event.PID); err != nil {
+		log.Printf("DENY pid=%d: terminate failed (process may have exited): %v", event.PID, err)
+	}
+
 	return nil
 }
 
-func (h *ActionHandler) handleLog(_ *api.Event, _ *api.ActionResult) error {
+func (h *ActionHandler) handleLog(event *api.Event, result *api.ActionResult) error {
+	level := "INFO"
+	if result.Action == api.ActionDeny {
+		level = "WARN"
+	}
+
+	log.Printf("[%s] audit pid=%d type=%s action=%s reason=%q audit=%v",
+		level, event.PID, event.Type, result.Action, result.Reason, result.Audit)
+
 	return nil
 }
 

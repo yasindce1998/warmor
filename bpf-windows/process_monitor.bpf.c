@@ -1,92 +1,60 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /* Copyright (c) 2026 warmor */
 
-// eBPF-for-Windows process monitoring program
-// Monitors process creation events on Windows
+// eBPF-for-Windows process monitoring program.
+// Attaches to process creation/exit hooks via the BIND program type.
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-// Event structure matching api.Event
-struct process_event {
+#define EVENT_TYPE_PROCESS 1
+
+// Common event header — must match EBPFEventHeader in ebpf_loader.go
+struct event_header {
+    __u32 event_type;
     __u32 pid;
-    __u32 ppid;
-    __u32 uid;
-    __u32 gid;
-    char comm[16];
-    char filename[256];
+    __u32 tid;
     __u64 timestamp;
 };
 
-// Map for sending events to userspace
+// Process event payload — must match EBPFProcessEvent in ebpf_loader.go
+struct process_event {
+    struct event_header hdr;
+    __u32 parent_pid;
+    __s32 exit_code;
+    char image_name[256];
+    char cmd_line[512];
+};
+
+// Ring buffer map for sending events to userspace
 struct {
-    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-    __uint(key_size, sizeof(__u32));
-    __uint(value_size, sizeof(__u32));
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
 } events SEC(".maps");
 
-// Map for configuration
-struct {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
-    __type(key, __u32);
-    __type(value, __u32);
-    __uint(max_entries, 1);
-} config SEC(".maps");
-
 // Hook for process creation
-// In eBPF-for-Windows, this attaches to process creation callbacks
 SEC("bind")
-int process_create_monitor(void *ctx)
+int process_monitor(void *ctx)
 {
-    struct process_event event = {};
-    
-    // Get process information from context
-    // Note: Actual implementation depends on eBPF-for-Windows context structure
-    // This is a placeholder showing the expected structure
-    
-    // Get PID
-    event.pid = bpf_get_current_pid_tgid() >> 32;
-    
-    // Get UID (Windows SID mapped to UID)
-    event.uid = bpf_get_current_uid_gid() & 0xFFFFFFFF;
-    event.gid = bpf_get_current_uid_gid() >> 32;
-    
-    // Get process name
-    bpf_get_current_comm(&event.comm, sizeof(event.comm));
-    
-    // Get timestamp
-    event.timestamp = bpf_ktime_get_ns();
-    
-    // TODO: Get full executable path from Windows context
-    // This requires parsing Windows-specific structures
-    __builtin_memcpy(event.filename, "C:\\Windows\\System32\\", 21);
-    __builtin_memcpy(event.filename + 21, event.comm, sizeof(event.comm));
-    
-    // Send event to userspace
-    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, 
-                          &event, sizeof(event));
-    
-    return 0;
-}
+    struct process_event *event;
 
-// Hook for process termination
-SEC("bind")
-int process_exit_monitor(void *ctx)
-{
-    struct process_event event = {};
-    
-    event.pid = bpf_get_current_pid_tgid() >> 32;
-    event.uid = bpf_get_current_uid_gid() & 0xFFFFFFFF;
-    event.gid = bpf_get_current_uid_gid() >> 32;
-    bpf_get_current_comm(&event.comm, sizeof(event.comm));
-    event.timestamp = bpf_ktime_get_ns();
-    
-    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
-                          &event, sizeof(event));
-    
+    event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
+    if (!event)
+        return 0;
+
+    event->hdr.event_type = EVENT_TYPE_PROCESS;
+    event->hdr.pid = bpf_get_current_pid_tgid() >> 32;
+    event->hdr.tid = (__u32)bpf_get_current_pid_tgid();
+    event->hdr.timestamp = bpf_ktime_get_ns();
+
+    event->parent_pid = 0;
+    event->exit_code = 0;
+
+    bpf_get_current_comm(event->image_name, sizeof(event->image_name));
+    __builtin_memset(event->cmd_line, 0, sizeof(event->cmd_line));
+
+    bpf_ringbuf_submit(event, 0);
     return 0;
 }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
-
-

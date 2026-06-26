@@ -96,7 +96,7 @@ This guide provides detailed instructions for building warmor from source.
 - **Architecture:** x64 only (ARM64 planned)
 - **Privileges:** Administrator access required (for ETW)
 
-**⚠️ Important:** Windows support is EXPERIMENTAL/BETA. ETW provides monitoring only (no enforcement).
+**⚠️ Important:** Windows support is EXPERIMENTAL/BETA. ETW provides monitoring with post-facto enforcement (process termination via Win32 API) and sandbox primitives (Job Objects + Integrity Levels).
 
 #### macOS (Beta/Experimental) 🚧
 
@@ -190,13 +190,13 @@ make install
 cd ..
 
 # Verify
-ls internal\platform\etw\programs\*.bpf.o
+ls internal\platform\etw\programs\*.o
 ```
 
 This will compile:
-- `process_monitor.bpf.o` - Process monitoring
-- `file_monitor.bpf.o` - File monitoring  
-- `network_monitor.bpf.o` - Network monitoring
+- `process_monitor.o` - Process monitoring
+- `file_monitor.o` - File monitoring  
+- `network_monitor.o` - Network monitoring
 
 **Note:** eBPF programs are optional. warmor will automatically fall back to ETW if eBPF-for-Windows is not available.
 
@@ -551,7 +551,7 @@ Stats Interval: 30s
 Log Level: info
 
 ⚠️  WARNING: Windows support is EXPERIMENTAL/BETA
-⚠️  Monitoring only (no enforcement)
+⚠️  Enforcement: post-facto (process termination after detection)
 
 Initializing warmor enforcer...
 Windows platform: Initializing ETW consumer

@@ -167,20 +167,23 @@ func ParseFileEvent(record *EVENT_RECORD) (*api.Event, error) {
 		if parsed != nil {
 			fileEvent.Path = parsed.FileName
 			fileEvent.Flags = parsed.Flags
+			if parsed.FileObject != 0 && parsed.FileName != "" {
+				fileObjectPaths.Store(parsed.FileObject, parsed.FileName)
+			}
 		}
 
 	case EventTypeFileRead:
 		fileEvent.Operation = "read"
 		parsed := parseFileIOData(data)
 		if parsed != nil {
-			fileEvent.Path = parsed.FileName
+			fileEvent.Path = resolveFileObjectPath(parsed.FileObject)
 		}
 
 	case EventTypeFileWrite:
 		fileEvent.Operation = "write"
 		parsed := parseFileIOData(data)
 		if parsed != nil {
-			fileEvent.Path = parsed.FileName
+			fileEvent.Path = resolveFileObjectPath(parsed.FileObject)
 		}
 	}
 
@@ -214,18 +217,23 @@ func parseFileCreateData(data []byte) *FileEventData {
 
 // parseFileIOData extracts fields from a FileRead/FileWrite event.
 // Layout: FileObject(8) + IrpPtr(8) + TTID(4) + Offset(8) + IoSize(4) + IoFlags(4)
-// The path is not included in read/write events; it requires correlation with create.
 func parseFileIOData(data []byte) *FileEventData {
 	if len(data) < 20 {
 		return nil
 	}
 
-	result := &FileEventData{
+	return &FileEventData{
 		FileObject: binary.LittleEndian.Uint64(data[0:8]),
 	}
+}
 
-	// Read/write events don't carry the file path directly.
-	// The path would need to be correlated via FileObject from a prior Create event.
-	// For now we record the file object for correlation.
-	return result
+// resolveFileObjectPath looks up a FileObject handle in the correlation map.
+func resolveFileObjectPath(fileObject uint64) string {
+	if fileObject == 0 {
+		return ""
+	}
+	if path, ok := fileObjectPaths.Load(fileObject); ok {
+		return path.(string)
+	}
+	return ""
 }

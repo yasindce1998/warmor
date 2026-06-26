@@ -3,7 +3,7 @@
 **Status:** 🚧 EXPERIMENTAL/BETA  
 **Implementation:** eBPF-for-Windows (primary) + ETW (fallback)  
 **Version:** 2.0-beta  
-**Last Updated:** June 25, 2026
+**Last Updated:** June 26, 2026
 
 ---
 
@@ -13,8 +13,12 @@
 - ✅ eBPF-for-Windows integration with full program loading and ring buffer events
 - ✅ ETW-based monitoring as automatic fallback
 - ✅ Process, file, and network event collection with real binary parsing
-- ✅ Enforcement capabilities (eBPF mode)
+- ✅ Enforcement capabilities (process termination via Win32 API)
+- ✅ File path correlation (FileObject→path mapping for read/write events)
+- ✅ Full network event capture (local + remote address/port)
+- ✅ Windows sandbox primitives (Job Objects + Integrity Levels)
 - ✅ Multi-step detection: service check, driver probe, DLL version query, API verification
+- ✅ Windows CI workflow (build + test on windows-latest)
 - ⚠️ Limited testing on production systems
 - ⚠️ Performance characteristics not fully validated
 
@@ -69,19 +73,22 @@
 - **ETW Consumer Framework** - Complete ETW session management (automatic fallback)
 - **Process Monitoring** - Process creation/termination with binary event parsing (PID, PPID, SID, image name, command line)
 - **File Monitoring** - File create/read/write with binary parsing (file object, path, flags, attributes)
-- **Network Monitoring** - TCP/UDP with full binary parsing (IPv4/IPv6, local/remote addr+port)
+- **File Path Correlation** - FileObject→path mapping via `sync.Map` (create events populate; read/write events resolve)
+- **Network Monitoring** - TCP/UDP with full binary parsing (IPv4/IPv6, local + remote addr/port)
 - **Platform Abstraction** - Clean interface with dual-mode architecture
 - **WASM Integration** - Cross-platform policy evaluation
 - **Dual-Mode Architecture** - eBPF + ETW with graceful fallback
-- **Enforcement** - Can block operations in eBPF mode
+- **Enforcement** - Process termination via Win32 `OpenProcess`/`TerminateProcess` (both modes)
+- **Windows Sandbox** - Job Objects (resource limits, kill-on-close) + Integrity Levels (write restriction)
+- **Windows CI** - GitHub Actions workflow with `windows-latest` runner (build + race-detector tests)
 
 ### 🚧 In Progress
 - **Performance Optimization** - Buffer tuning and event filtering
 - **Error Handling** - Comprehensive error recovery
-- **File Path Correlation** - Read/write events need FileObject-to-path mapping
+- **AppContainer Isolation** - Full network/filesystem sandboxing (stretch goal)
 
-### ❌ Not Implemented (ETW Mode Only)
-- **Enforcement** - Cannot block operations (ETW is monitoring only)
+### ❌ Not Implemented
+- **In-Path Blocking (ETW Mode)** - Cannot block operations before execution (ETW is post-facto)
 - **Advanced Filtering** - Event-level filtering
 - **Container Support** - Windows Container monitoring
 
@@ -285,9 +292,10 @@ sc.exe delete Warmor
   "network": {
     "operation": "connect",
     "protocol": "tcp",
+    "local_addr": "10.0.0.5",
+    "local_port": 52341,
     "remote_addr": "192.168.1.100",
-    "remote_port": 443,
-    "local_port": 52341
+    "remote_port": 443
   },
   "timestamp": "2026-06-01T12:00:00Z"
 }
@@ -309,17 +317,17 @@ Capabilities{
 ```go
 Capabilities{
     ProcessMonitoring: true,   // ✅ ETW process events
-    FileMonitoring:    true,   // ✅ ETW file events
-    NetworkMonitoring: true,   // ✅ ETW network events
-    Enforcement:       false,  // ❌ ETW is monitoring only
+    FileMonitoring:    true,   // ✅ ETW file events (with path correlation)
+    NetworkMonitoring: true,   // ✅ ETW network events (local + remote addr)
+    Enforcement:       true,   // ✅ Process termination (post-facto, not in-path)
 }
 ```
 
 ## Limitations
 
 ### Current Limitations (ETW Mode)
-1. **No Enforcement** - Cannot block operations (ETW limitation)
-2. **Monitoring Only** - Can log/alert but not prevent
+1. **No In-Path Blocking** - Cannot block operations before execution (ETW is post-facto)
+2. **Post-Facto Enforcement** - Can terminate processes after detection but not prevent syscall completion
 3. **No Container Support** - Windows Container monitoring not implemented
 4. **Performance** - ETW has higher overhead than eBPF
 
@@ -327,7 +335,6 @@ Capabilities{
 1. **Requires eBPF-for-Windows** - Must be installed and running
 2. **Limited Hook Points** - Fewer hook points compared to Linux eBPF
 3. **Windows-Specific Parsing** - Some event context differs from Linux
-4. **File Path Correlation** - Read/write events reference FileObject, not path
 
 ### ETW-Specific Limitations
 - **Asynchronous** - Events delivered with slight delay
@@ -479,6 +486,9 @@ clang --version
 # Navigate to eBPF programs directory
 cd bpf-windows
 
+# Check SDK path is valid
+make check
+
 # Build all programs
 make all
 
@@ -491,9 +501,9 @@ ls ../internal/platform/etw/programs/
 
 Expected output:
 ```
-process_monitor.bpf.o
-file_monitor.bpf.o
-network_monitor.bpf.o
+process_monitor.o
+file_monitor.o
+network_monitor.o
 ```
 
 ### Running with eBPF Mode
@@ -530,50 +540,62 @@ Initializing ETW consumer...
 
 ### eBPF Programs
 
-warmor includes three eBPF programs for Windows:
+warmor includes three eBPF programs for Windows, all using the `BPF_MAP_TYPE_RINGBUF` map with a common `EBPFEventHeader` (event_type, pid, tid, timestamp):
 
 #### 1. Process Monitor (`process_monitor.bpf.c`)
 - Monitors process creation and termination
-- Captures: PID, PPID, UID, executable path, command line
-- Hook: Process creation callbacks
+- Captures: PID, TID, parent PID, exit code, image name, command line
+- Uses: `bpf_ringbuf_reserve` / `bpf_ringbuf_submit`
+- Hook: `SEC("bind")` process creation callbacks
 
 #### 2. File Monitor (`file_monitor.bpf.c`)
 - Monitors file operations (create, read, write, delete)
-- Captures: PID, UID, file path, operation type, flags
-- Hook: File system minifilter
-- Supports path filtering via eBPF maps
+- Captures: PID, TID, operation type, flags, file path
+- Uses: `bpf_ringbuf_reserve` / `bpf_ringbuf_submit`
+- Hook: `SEC("bind")` file system minifilter
 
 #### 3. Network Monitor (`network_monitor.bpf.c`)
 - Monitors network connections (TCP/UDP)
-- Captures: PID, UID, source/dest IP/port, protocol
-- Hook: XDP (eXpress Data Path) and socket operations
-- Supports IP and port filtering via eBPF maps
+- Captures: PID, TID, protocol, operation, local/remote addr+port, address family
+- Uses: `bpf_ringbuf_reserve` / `bpf_ringbuf_submit`
+- Hook: `SEC("bind")` socket operations
 
 ### Building Custom eBPF Programs
 
 ```c
-// Example: Custom eBPF program for Windows
+// Example: Custom eBPF program for Windows (ring buffer pattern)
 #include <bpf/bpf_helpers.h>
 
-struct my_event {
+struct ebpf_event_header {
+    __u32 event_type;
     __u32 pid;
+    __u32 tid;
     __u64 timestamp;
 };
 
+struct my_event {
+    struct ebpf_event_header hdr;
+    __u64 custom_data;
+};
+
 struct {
-    __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-    __uint(key_size, sizeof(__u32));
-    __uint(value_size, sizeof(__u32));
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 256 * 1024);
 } events SEC(".maps");
 
 SEC("bind")
 int my_monitor(void *ctx) {
-    struct my_event event = {};
-    event.pid = bpf_get_current_pid_tgid() >> 32;
-    event.timestamp = bpf_ktime_get_ns();
-    
-    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
-                          &event, sizeof(event));
+    struct my_event *event = bpf_ringbuf_reserve(&events, sizeof(*event), 0);
+    if (!event)
+        return 0;
+
+    event->hdr.event_type = 100; // custom type
+    event->hdr.pid = bpf_get_current_pid_tgid() >> 32;
+    event->hdr.tid = (__u32)bpf_get_current_pid_tgid();
+    event->hdr.timestamp = bpf_ktime_get_ns();
+    event->custom_data = 0;
+
+    bpf_ringbuf_submit(event, 0);
     return 0;
 }
 
@@ -582,7 +604,8 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
 Compile:
 ```powershell
-clang -O2 -target bpf -c my_monitor.c -o my_monitor.bpf.o
+clang -O2 -target bpf -c my_monitor.c -o my_monitor.o ^
+    -I "C:\Program Files\ebpf-for-windows\sdk\include"
 ```
 
 ### Troubleshooting eBPF Mode
@@ -595,8 +618,9 @@ clang -O2 -target bpf -c my_monitor.c -o my_monitor.bpf.o
 
 **Issue:** "Failed to load eBPF programs"
 ```powershell
-# Check if programs are compiled
-ls bpf-windows\*.bpf.o
+# Check if programs are compiled (loader searches multiple directories)
+ls bpf-windows\*.o
+ls internal\platform\etw\programs\*.o
 
 # Rebuild if needed
 cd bpf-windows
@@ -644,6 +668,98 @@ sc.exe query ebpfsvc
 - 🚧 Some hook points not yet implemented
 - 🚧 Performance not fully optimized
 - 🚧 Limited testing on production workloads
+
+## Enforcement
+
+warmor on Windows enforces policy decisions via process termination using the Win32 API:
+
+```go
+// Deny action terminates the offending process
+windows.OpenProcess(PROCESS_TERMINATE, false, pid)
+windows.TerminateProcess(handle, 1)
+```
+
+Enforcement is best-effort — if the target process has already exited or cannot be opened, the error is logged but does not block the pipeline.
+
+### Enforcement Flow
+
+1. Policy engine evaluates an event and returns `ActionDeny`
+2. If in audit mode, the deny is downgraded to a log entry (no termination)
+3. Otherwise, `terminateProcess(pid)` calls `OpenProcess` + `TerminateProcess`
+4. Structured audit log emitted regardless of termination success/failure
+
+### Audit Mode
+
+When `auditMode` is enabled (or per-rule `audit: true`), deny decisions are logged without enforcement. This is the recommended mode for initial deployment:
+
+```powershell
+.\warmor.exe -audit-mode
+```
+
+## Windows Sandbox
+
+warmor implements Windows-native sandbox primitives for process containment:
+
+### Job Objects
+
+Job Objects restrict resource usage and prevent sandbox escape:
+
+- **Memory limits** — cap per-process memory consumption
+- **Process limits** — restrict the number of child processes
+- **Kill-on-close** — all processes in the job are terminated when the job handle is closed
+
+```go
+// Usage
+job, err := NewJobObjectSandbox(profile)
+job.AssignProcess(pid)
+defer job.Close()
+```
+
+### Integrity Levels
+
+Integrity levels restrict a process's write access. Lower-integrity processes cannot write to objects at higher integrity:
+
+| Level | SID | Use Case |
+|-------|-----|----------|
+| Untrusted | S-1-16-0 | Maximum restriction |
+| Low | S-1-16-4096 | Sandboxed processes (default for strict profiles) |
+| Medium | S-1-16-8192 | Normal user processes |
+| High | S-1-16-12288 | Administrator processes |
+
+```go
+// Lower a process to "low" integrity
+SetProcessIntegrityLevel(pid, "low")
+```
+
+### Combined Sandbox Application
+
+`ApplyWindowsSandbox(pid, profile)` combines both mechanisms:
+1. Creates a named Job Object with resource limits from the profile
+2. Assigns the target process to the job
+3. If the profile has `DenyNetwork` or `ReadOnlyFS`, lowers integrity to "low"
+
+Sandbox profiles are defined in policy YAML:
+```yaml
+sandbox:
+  name: strict
+  deny_network: true
+  read_only_fs: true
+  max_processes: 16
+  max_memory_mb: 256
+```
+
+### AppContainer (Future)
+
+Full network/filesystem isolation via Windows AppContainers is planned as a future enhancement. AppContainers provide stronger isolation than integrity levels but require more complex setup (capability SIDs, named object access).
+
+## Continuous Integration
+
+Windows builds are validated on every push and PR via `.github/workflows/windows-ci.yml`:
+
+- **Runner:** `windows-latest`
+- **Build:** `go build ./...` (verifies compilation of all packages)
+- **Tests:** `go test -race -short ./...` (unit tests with race detector)
+- **Scope:** Tests that require kernel access (ETW sessions, eBPF) are skipped via `-short`
 
 ## Debugging
 
@@ -779,7 +895,19 @@ logman query "WarmorETWSession" -ets
 - [ ] Advanced event filtering
 - [ ] Container support
 
+### Phase 7.3 (Complete)
+- [x] Win32 enforcement (OpenProcess + TerminateProcess)
+- [x] Audit mode (log-only deny decisions)
+- [x] Job Object sandboxing (memory, process limits, kill-on-close)
+- [x] Integrity Level enforcement (low integrity for strict profiles)
+- [x] File path correlation via FileObject tracking
+- [x] LocalAddr included in network events
+- [x] eBPF ring buffer programs with correct struct layouts
+- [x] Windows CI (GitHub Actions, windows-latest)
+- [ ] AppContainer network/filesystem isolation
+
 ### Phase 8 (Future)
+- [ ] AppContainer full isolation
 - [ ] Windows Service installation
 - [ ] Event Viewer integration
 - [ ] Performance counters

@@ -60,6 +60,10 @@ var (
 	activeConsumer   *Consumer
 )
 
+// fileObjectPaths maps FileObject handles (uint64) to file paths (string).
+// Populated from Create events, consumed by Read/Write events.
+var fileObjectPaths sync.Map
+
 // Consumer represents an ETW consumer session
 type Consumer struct {
 	sessionName string

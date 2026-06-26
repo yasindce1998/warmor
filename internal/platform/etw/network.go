@@ -214,10 +214,10 @@ func parseNetworkAddrs(data []byte, netEvent *api.NetworkEvent, version uint8) {
 		localPort := binary.BigEndian.Uint16(data[offset+32 : offset+34])
 		remotePort := binary.BigEndian.Uint16(data[offset+34 : offset+36])
 
+		netEvent.LocalAddr = formatIPv6(localAddr)
 		netEvent.RemoteAddr = formatIPv6(remoteAddr)
 		netEvent.RemotePort = remotePort
 		netEvent.LocalPort = localPort
-		_ = localAddr
 	} else {
 		// IPv4
 		localAddr := data[offset : offset+4]
@@ -225,11 +225,12 @@ func parseNetworkAddrs(data []byte, netEvent *api.NetworkEvent, version uint8) {
 		localPort := binary.BigEndian.Uint16(data[offset+8 : offset+10])
 		remotePort := binary.BigEndian.Uint16(data[offset+10 : offset+12])
 
+		netEvent.LocalAddr = fmt.Sprintf("%d.%d.%d.%d",
+			localAddr[0], localAddr[1], localAddr[2], localAddr[3])
 		netEvent.RemoteAddr = fmt.Sprintf("%d.%d.%d.%d",
 			remoteAddr[0], remoteAddr[1], remoteAddr[2], remoteAddr[3])
 		netEvent.RemotePort = remotePort
 		netEvent.LocalPort = localPort
-		_ = localAddr
 	}
 }
 

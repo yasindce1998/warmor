@@ -272,7 +272,9 @@ func (l *EBPFLoader) loadLibbpf(ctx context.Context, objPath string) error {
 	return nil
 }
 
-// loadIndividualPrograms tries to load separate .o files for each subsystem
+// loadIndividualPrograms tries to load separate .o files for each subsystem.
+// It searches the configured programDir first, then a "programs/" subdirectory
+// relative to the executable (for pre-compiled shipped objects).
 func (l *EBPFLoader) loadIndividualPrograms(ctx context.Context) error {
 	programs := []struct {
 		filename string
@@ -283,24 +285,36 @@ func (l *EBPFLoader) loadIndividualPrograms(ctx context.Context) error {
 		{"network_monitor.o", "network monitoring"},
 	}
 
+	searchDirs := []string{l.programDir}
+
+	// Also search a "programs" subdirectory next to the executable
+	if exe, err := os.Executable(); err == nil {
+		searchDirs = append(searchDirs, filepath.Join(filepath.Dir(exe), "programs"))
+	}
+	// And the embedded programs path used during development
+	searchDirs = append(searchDirs, filepath.Join("internal", "platform", "etw", "programs"))
+
 	var found []string
 	for _, p := range programs {
-		path := filepath.Join(l.programDir, p.filename)
-		if _, err := os.Stat(path); err == nil {
-			found = append(found, path)
+		for _, dir := range searchDirs {
+			path := filepath.Join(dir, p.filename)
+			if _, err := os.Stat(path); err == nil {
+				found = append(found, path)
+				break
+			}
 		}
 	}
 
 	if len(found) == 0 {
 		return fmt.Errorf(
-			"no eBPF object files found in %s (expected warmor_monitor.o or individual *_monitor.o files); "+
-				"compile with: clang -target bpf -O2 -c <source>.c -o %s/<name>.o",
-			l.programDir, l.programDir,
+			"no eBPF object files found in %v (expected warmor_monitor.o or individual *_monitor.o files); "+
+				"compile with: cd bpf-windows && make install",
+			searchDirs,
 		)
 	}
 
 	// Load the first available object file to get started
-	log.Printf("eBPF: found %d program file(s) in %s", len(found), l.programDir)
+	log.Printf("eBPF: found %d program file(s)", len(found))
 	if l.useLegacy {
 		return l.loadLegacy(ctx, found[0])
 	}
@@ -617,10 +631,23 @@ func (l *EBPFLoader) parseNetworkEvent(data []byte, hdr *EBPFEventHeader, ts tim
 		netEvent.RemotePort = remotePort
 
 		// Parse IP addresses based on address family
+		// Layout: localAddr at [28:44], remoteAddr at [44:60]
 		if addrFamily == 2 { // AF_INET
+			netEvent.LocalAddr = fmt.Sprintf("%d.%d.%d.%d",
+				data[28], data[29], data[30], data[31])
 			netEvent.RemoteAddr = fmt.Sprintf("%d.%d.%d.%d",
 				data[44], data[45], data[46], data[47])
 		} else if addrFamily == 23 { // AF_INET6 (Windows)
+			netEvent.LocalAddr = fmt.Sprintf("%x:%x:%x:%x:%x:%x:%x:%x",
+				binary.BigEndian.Uint16(data[28:30]),
+				binary.BigEndian.Uint16(data[30:32]),
+				binary.BigEndian.Uint16(data[32:34]),
+				binary.BigEndian.Uint16(data[34:36]),
+				binary.BigEndian.Uint16(data[36:38]),
+				binary.BigEndian.Uint16(data[38:40]),
+				binary.BigEndian.Uint16(data[40:42]),
+				binary.BigEndian.Uint16(data[42:44]),
+			)
 			netEvent.RemoteAddr = fmt.Sprintf("%x:%x:%x:%x:%x:%x:%x:%x",
 				binary.BigEndian.Uint16(data[44:46]),
 				binary.BigEndian.Uint16(data[46:48]),
