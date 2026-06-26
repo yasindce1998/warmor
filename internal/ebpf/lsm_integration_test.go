@@ -96,7 +96,7 @@ func TestLSM_PolicyMapCRUD(t *testing.T) {
 	pm := loader.PolicyMap()
 
 	// Insert a rule
-	err = pm.SetRule(0, EventTypeExec, "/usr/bin/test-blocked", ActionDeny, false)
+	err := pm.SetRule(0, EventTypeExec, "/usr/bin/test-blocked", ActionDeny, false)
 	if err != nil {
 		t.Fatalf("SetRule failed: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestLSM_ExecBlocked(t *testing.T) {
 
 	// Attempt to execute — should get EPERM
 	cmd := exec.Command(testBin)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err == nil {
 		t.Fatal("expected execution to be blocked, but it succeeded")
 	}
@@ -213,7 +213,7 @@ func TestLSM_FileOpenBlocked(t *testing.T) {
 	}
 
 	// Attempt to open — should get EPERM
-	_, err = os.ReadFile(testFile)
+	_, err := os.ReadFile(testFile)
 	if err == nil {
 		t.Fatal("expected file open to be blocked, but it succeeded")
 	}
@@ -290,7 +290,7 @@ func TestLSM_AuditModeNoBlock(t *testing.T) {
 
 	// In audit mode, execution should still succeed
 	cmd := exec.Command(testBin)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		t.Errorf("in audit mode, exec should succeed but got: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestLSM_CgroupFilter(t *testing.T) {
 
 	// Execution should succeed because our cgroup is not in the filter
 	cmd := exec.Command(testBin)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		t.Errorf("with cgroup filter excluding us, exec should succeed: %v", err)
 	}
@@ -600,7 +600,7 @@ func TestLSM_PtraceBlocked(t *testing.T) {
 	}
 
 	// Attempt to ptrace attach — should get EPERM
-	err = syscall.PtraceAttach(cmd.Process.Pid)
+	err := syscall.PtraceAttach(cmd.Process.Pid)
 	if err == nil {
 		syscall.PtraceDetach(cmd.Process.Pid)
 		t.Fatal("expected ptrace to be blocked, but it succeeded")
@@ -635,7 +635,7 @@ func TestLSM_MountBlocked(t *testing.T) {
 	target := t.TempDir()
 
 	// Attempt to mount proc — should get EPERM
-	err = syscall.Mount("none", target, "proc", 0, "")
+	err := syscall.Mount("none", target, "proc", 0, "")
 	if err == nil {
 		syscall.Unmount(target, 0)
 		t.Fatal("expected mount to be blocked, but it succeeded")
