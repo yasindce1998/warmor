@@ -2,9 +2,9 @@
 
 **Project Name:** warmor (WebAssembly + Armor)  
 **Tagline:** Cross-platform, Wasm-powered system-level security enforcer  
-**Version:** 1.5.0-beta  
-**Date:** 2026-06-16  
-**Status:** Phase 8 Complete
+**Version:** 2.0.0-beta  
+**Date:** 2026-06-28  
+**Status:** Phase 9 Complete
 
 ---
 
@@ -37,6 +37,7 @@ Traditional security enforcers (AppArmor, SELinux, eBPF) are:
 | **Phase 6** | ✅ COMPLETE | LSM-BPF kernel enforcement, policy map fast-path | Linux |
 | **Phase 7** | ✅ COMPLETE | Stateful policies, fleet management, SIEM | All |
 | **Phase 8** | ✅ COMPLETE | mTLS, CLI (Bubble Tea), observability, container runtime | All |
+| **Phase 9** | ✅ COMPLETE | Security intelligence: learning mode, simulator, supply-chain integrity, escape/drift detection, canary auto-rollback, temporal policies, attack graph, blast radius | All |
 
 ### Key Metrics Achieved
 
@@ -999,6 +1000,64 @@ helm install warmor deploy/helm/warmor \
 
 DaemonSet runs with: `privileged: true`, `hostPID: true`, `hostNetwork: true`, volume mounts for containerd socket, BPF filesystem, and policy directory.
 
+### Phase 9: Security Intelligence (Weeks 37-44) ✅ COMPLETE
+**Goal:** Move from static policy enforcement to autonomous security intelligence — learn, simulate, detect, and adapt.
+
+**Deliverables:**
+- [x] Learning mode — observe container behavior and synthesize deny-everything-else policies (`warmor-learn`, `internal/learner/`)
+- [x] Policy simulator — replay historical events against candidate policies before deployment (`warmor-simulate`, `internal/simulator/`)
+- [x] Supply-chain integrity — SHA-256 binary allowlist verified in-kernel at exec time (`warmor-integrity-scan`, `internal/integrity/`)
+- [x] Container escape detection — pattern correlation for 12 breakout techniques (`internal/escape/`)
+- [x] Drift detection — fleet behavioral fingerprinting with z-score anomaly detection (`internal/drift/`)
+- [x] Canary rollout with auto-rollback — deny-rate delta monitoring, no humans in the loop (`internal/policyserver/` canary analyzer)
+- [x] Temporal policies — time-dimension constraints (`internal/temporal/`)
+- [x] Attack graph — MITRE ATT&CK correlation and per-container kill-chain DAGs (`internal/attackgraph/`)
+- [x] Blast radius — container relationship graph + BFS reachability analysis (`internal/blastradius/`)
+
+**Success Criteria:** ✅ MET
+- [x] Zero-manual-rule policy generation from observed behavior
+- [x] Pre-deployment impact analysis via historical replay
+- [x] In-kernel binary integrity enforcement
+- [x] Deny events mapped to MITRE ATT&CK techniques with kill-chain visualization
+- [x] Automatic policy rollback on anomalous canary behavior
+
+---
+
+## 7.1 Future Roadmap (Post-Phase 9)
+
+Planned enhancements beyond the current release. Tracked here as the single source of truth (formerly `docs/ROADMAP.md`).
+
+### Cloud & Enterprise Integrations
+- **Azure Security Center / Defender integration** — forward policy decisions and threat signals for unified SOC visibility.
+- **MDM/Intune enterprise policy deployment** — push Warmor policies to endpoints via Microsoft Intune device-management profiles.
+- **AWS Security Hub integration** — emit findings in ASFF format for aggregation in Security Hub dashboards.
+- **Policy marketplace** — community-shared, signed policy bundles.
+
+### Windows Platform
+- **eBPF-for-Windows kernel enforcement** — synchronous blocking on Windows (beyond current ETW monitoring).
+- **Hyper-V isolation for Windows containers** — extend container binding and enforcement to Hyper-V isolated containers.
+- **AppContainer full sandbox** — restrict policy-violating processes to AppContainer isolation rather than process termination.
+- **Windows Defender Application Control (WDAC) interop** — generate supplemental WDAC policies from Warmor learned baselines.
+
+### macOS Platform
+- **System Extensions for network filtering** — use the Network Extension framework to enforce network-level policies.
+- **Endpoint Security Framework deep file monitoring** — extend ESF hooks beyond process events to file-create, file-rename, and mount operations.
+
+### Linux Platform
+- **ARM64 eBPF support** — validate and optimize BPF programs for ARM64 (Graviton, Ampere) kernels.
+- **io_uring syscall filtering** — monitor and enforce policies on io_uring submissions to prevent sandbox bypass.
+- **Landlock LSM integration** — generate Landlock rulesets from Warmor policies for unprivileged sandboxing.
+
+### Policy Engine
+- **OPA/Rego policy language support** — allow writing policies in Rego alongside WASM and YAML.
+- **Policy versioning and rollback** — maintain policy history with one-command rollback to previous versions.
+- **Multi-cluster policy federation** — synchronize policies across Kubernetes clusters with conflict resolution.
+
+### Observability
+- **OpenTelemetry trace export** — emit per-decision traces with full causal chain (process → file → network).
+- **Grafana dashboard templates** — ship pre-built Grafana dashboards for common deployment patterns.
+- **Slack/PagerDuty alerting** — native alert routing for high-severity denials and anomaly detection.
+
 ---
 
 ## 8. Success Metrics
@@ -1113,7 +1172,7 @@ DaemonSet runs with: `privileged: true`, `hostPID: true`, `hostNetwork: true`, v
 
 ### Achievements to Date
 
-**Phase 1-4 Complete:**
+**Phase 1-9 Complete:**
 - ✅ Cross-platform architecture proven and implemented
 - ✅ WASM-based policy execution working on Linux, Windows, macOS
 - ✅ Performance targets met (<100μs latency with >90% cache hit rate)
@@ -1145,7 +1204,7 @@ DaemonSet runs with: `privileged: true`, `hostPID: true`, `hostNetwork: true`, v
 1. **Integration Testing:** Validate LSM-BPF enforcement on Linux 5.7+ with real workloads
 2. **Community Building:** Gather feedback from production deployments
 3. **Ecosystem:** Build policy library and community contributions
-4. **Phase 9 (Future):** Multi-cluster federation, policy marketplace, eBPF-for-Windows enforcement
+4. **Future roadmap (§7.1):** Multi-cluster federation, policy marketplace, eBPF-for-Windows enforcement, and enterprise/cloud integrations
 
 ### Key Differentiators
 
@@ -1156,7 +1215,7 @@ DaemonSet runs with: `privileged: true`, `hostPID: true`, `hostNetwork: true`, v
 
 ---
 
-**Document Version:** 1.5.0-beta  
-**Last Updated:** 2026-06-16  
-**Status:** Phase 8 Complete  
-**Next Review:** After Phase 9 scoping
+**Document Version:** 2.0.0-beta  
+**Last Updated:** 2026-06-28  
+**Status:** Phase 9 Complete  
+**Next Review:** After Future Roadmap (§7.1) scoping

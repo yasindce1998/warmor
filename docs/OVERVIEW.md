@@ -125,13 +125,12 @@
 
 - **[Quick Start](quick-start.md)** — Get warmor running in 5 minutes
 - **[Architecture](architecture.md)** — System design and components
-- **[PRD](PRD.md)** — Product requirements, phase tracking, and detailed feature reference
+- **[PRD](PRD.md)** — Product requirements, phase tracking, future roadmap, and detailed feature reference
 - **[Linux Guide](PLATFORM_LINUX.md)** — Production eBPF platform
 - **[Windows Guide](PLATFORM_WINDOWS.md)** — Beta ETW/eBPF platform
 - **[macOS Guide](PLATFORM_MACOS.md)** — Beta ESF platform
 - **[Security Posture](SECURITY_POSTURE.md)** — Fail-open vs fail-closed behavior
 - **[BPF Compatibility](BPF_COMPATIBILITY.md)** — Kernel version matrix
-- **[Roadmap](ROADMAP.md)** — Future enhancements and planned features
 
 ### Phase 9: Security Intelligence
 - **[Learning Mode](learning-mode.md)** — Live policy synthesis from container behavior
