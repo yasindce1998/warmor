@@ -62,7 +62,9 @@ func TestMarshalEventForWASM_ProcessEventWithSubStruct(t *testing.T) {
 	}
 
 	var m map[string]any
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
 
 	if m["filename"] != "/bin/bash" {
 		t.Errorf("filename = %v, want /bin/bash (from Process sub-struct)", m["filename"])
@@ -89,7 +91,9 @@ func TestMarshalEventForWASM_FileEvent(t *testing.T) {
 	}
 
 	var m map[string]any
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
 
 	if m["type"] != "FILE" {
 		t.Errorf("type = %v, want FILE", m["type"])
@@ -121,7 +125,9 @@ func TestMarshalEventForWASM_FileEvent_Fallback(t *testing.T) {
 	}
 
 	var m map[string]any
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
 
 	if m["type"] != "FILE" {
 		t.Errorf("type = %v, want FILE", m["type"])
@@ -156,7 +162,9 @@ func TestMarshalEventForWASM_NetworkEvent(t *testing.T) {
 	}
 
 	var m map[string]any
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
 
 	if m["type"] != "NETWORK" {
 		t.Errorf("type = %v, want NETWORK", m["type"])
@@ -190,7 +198,9 @@ func TestMarshalEventForWASM_NetworkEvent_Fallback(t *testing.T) {
 	}
 
 	var m map[string]any
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
 
 	if m["type"] != "NETWORK" {
 		t.Errorf("type = %v, want NETWORK", m["type"])
@@ -219,7 +229,9 @@ func TestMarshalEventForWASM_UnknownType(t *testing.T) {
 	}
 
 	var m map[string]any
-	json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
 
 	if m["type"] != "PROCESS" {
 		t.Errorf("unknown type should default to PROCESS, got %v", m["type"])

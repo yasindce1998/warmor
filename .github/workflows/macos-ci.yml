@@ -16,11 +16,11 @@ jobs:
         with:
           go-version: "1.26"
 
-      - name: Build (exclude ESF - requires full SDK not on runner)
-        run: go build $(go list ./... | grep -v 'internal/platform')
+      - name: Build (CGO disabled - ESF requires SDK headers not on runner)
+        run: CGO_ENABLED=0 go build ./...
 
       - name: Run tests
-        run: go test -race -short -coverprofile=coverage.out $(go list ./... | grep -v 'internal/platform')
+        run: CGO_ENABLED=0 go test -race -short -coverprofile=coverage.out ./...
 
       - name: Check coverage threshold
         run: |
