@@ -103,7 +103,7 @@
 - Embedded HTML via `embed.FS` — no external dependencies
 
 ### CI & Coverage
-- macOS CI workflow (`.github/workflows/macos-ci.yml`) with `CGO_ENABLED=1` for ESF
+- macOS CI workflow (`.github/workflows/macos-ci.yml`) with `CGO_ENABLED=0` (ESF SDK headers unavailable on runner)
 - Coverage gating at 40% threshold across all platform CI workflows (Linux, Windows, macOS)
 - Builds fail if coverage drops below threshold
 

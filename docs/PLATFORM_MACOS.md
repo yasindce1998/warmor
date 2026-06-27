@@ -536,8 +536,8 @@ log show --predicate 'process == "warmor-daemon"' --last 5m
 macOS builds are validated on every push and PR via `.github/workflows/macos-ci.yml`:
 
 - **Runner:** `macos-latest`
-- **Build:** `CGO_ENABLED=1 go build ./...` (CGO required for ESF platform code)
-- **Tests:** `go test -race -short -coverprofile=coverage.out ./...`
+- **Build:** `CGO_ENABLED=0 go build ./...` (CGO disabled — ESF SDK headers unavailable on runner)
+- **Tests:** `CGO_ENABLED=0 go test -race -short -coverprofile=coverage.out ./...`
 - **Coverage Gate:** Fails the build if total coverage drops below 40%
 - **Scope:** Tests requiring Endpoint Security entitlements are skipped via `-short`
 
