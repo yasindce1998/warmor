@@ -113,7 +113,9 @@ func TestLogDenial(t *testing.T) {
 	l.LogDenial(event, result)
 
 	var m map[string]any
-	json.Unmarshal(buf.Bytes(), &m)
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
 
 	if m["message"] != "action_denied" {
 		t.Errorf("message = %v, want action_denied", m["message"])
@@ -140,7 +142,9 @@ func TestLogDenial_AuditMode(t *testing.T) {
 	l.LogDenial(event, result)
 
 	var m map[string]any
-	json.Unmarshal(buf.Bytes(), &m)
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
 
 	if m["audit"] != true {
 		t.Errorf("audit = %v, want true", m["audit"])
@@ -154,7 +158,9 @@ func TestLogError(t *testing.T) {
 	l.LogError(errors.New("connection refused"), "failed to connect")
 
 	var m map[string]any
-	json.Unmarshal(buf.Bytes(), &m)
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
 
 	if m["level"] != "error" {
 		t.Errorf("level = %v, want error", m["level"])
@@ -184,7 +190,9 @@ func TestLogStats(t *testing.T) {
 	l.LogStats(stats)
 
 	var m map[string]any
-	json.Unmarshal(buf.Bytes(), &m)
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
 
 	if m["message"] != "enforcement_stats" {
 		t.Errorf("message = %v, want enforcement_stats", m["message"])

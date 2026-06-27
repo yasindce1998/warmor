@@ -20,6 +20,7 @@ jobs:
         run: go build ./...
 
       - name: Run unit tests
+        shell: bash
         run: go test -race -short -coverprofile=coverage.out ./...
 
       - name: Check coverage threshold
