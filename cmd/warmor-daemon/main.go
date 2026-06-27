@@ -35,6 +35,17 @@ var (
 func main() {
 	flag.Parse()
 
+	// Handle service subcommands (Windows: install/uninstall)
+	if handleServiceCommand(flag.Args()) {
+		return
+	}
+
+	// Run as Windows Service if launched by SCM
+	if isWindowsService() {
+		runService()
+		return
+	}
+
 	// Handle version flag
 	if *showVersion {
 		log.Printf("warmor version %s", version.Version)

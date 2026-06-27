@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"io"
 	"os"
 	"time"
 
@@ -13,19 +14,21 @@ type Logger struct {
 	logger zerolog.Logger
 }
 
-// NewLogger creates a new logger with the specified level
+// NewLogger creates a new logger with the specified level, writing to os.Stdout.
 func NewLogger(level string) *Logger {
-	// Configure zerolog
+	return NewLoggerWithWriter(level, os.Stdout)
+}
+
+// NewLoggerWithWriter creates a new logger with the specified level and output writer.
+func NewLoggerWithWriter(level string, w io.Writer) *Logger {
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 
-	// Parse level
 	logLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
 		logLevel = zerolog.InfoLevel
 	}
 
-	// Create logger
-	logger := zerolog.New(os.Stdout).
+	logger := zerolog.New(w).
 		Level(logLevel).
 		With().
 		Timestamp().

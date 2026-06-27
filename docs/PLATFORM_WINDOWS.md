@@ -200,23 +200,26 @@ Options:
         Prometheus metrics port (default: 9090)
 ```
 
-### Windows Service (Future)
+### Windows Service
+
+The daemon runs natively as a Windows Service using `golang.org/x/sys/windows/svc`:
+
 ```powershell
-# Install service (future feature)
-sc.exe create Warmor binPath= "C:\Program Files\Warmor\warmor.exe" start= auto
+# Install the service (requires Administrator)
+warmor-daemon.exe service install
 
-# Start service
-sc.exe start Warmor
+# The service appears as "Warmor Security Enforcer" in services.msc
+# It is configured for automatic start
 
-# Check status
-sc.exe query Warmor
-
-# Stop service
-sc.exe stop Warmor
-
-# Remove service
-sc.exe delete Warmor
+# Uninstall the service
+warmor-daemon.exe service uninstall
 ```
+
+When running as a service, the daemon:
+- Reports status transitions (StartPending → Running → StopPending → Stopped)
+- Responds to Stop, Shutdown, and Interrogate control requests
+- Logs to the Windows Event Viewer (Application log, source "warmor")
+- Gracefully shuts down on stop/shutdown signals
 
 ## Monitoring Capabilities
 
@@ -758,7 +761,8 @@ Windows builds are validated on every push and PR via `.github/workflows/windows
 
 - **Runner:** `windows-latest`
 - **Build:** `go build ./...` (verifies compilation of all packages)
-- **Tests:** `go test -race -short ./...` (unit tests with race detector)
+- **Tests:** `go test -race -short -coverprofile=coverage.out ./...` (unit tests with race detector)
+- **Coverage Gate:** Fails the build if total coverage drops below 40%
 - **Scope:** Tests that require kernel access (ETW sessions, eBPF) are skipped via `-short`
 
 ## Debugging
@@ -906,10 +910,11 @@ logman query "WarmorETWSession" -ets
 - [x] Windows CI (GitHub Actions, windows-latest)
 - [ ] AppContainer network/filesystem isolation
 
-### Phase 8 (Future)
+### Phase 8 (In Progress)
 - [ ] AppContainer full isolation
-- [ ] Windows Service installation
-- [ ] Event Viewer integration
+- [x] Windows Service installation (`warmor-daemon service install/uninstall`)
+- [x] Event Viewer integration (zerolog → Application log via `eventlog` package)
+- [x] Coverage gating in CI (40% threshold)
 - [ ] Performance counters
 - [ ] Azure integration
 - [ ] Hyper-V monitoring

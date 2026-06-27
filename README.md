@@ -170,6 +170,7 @@ Time-dimension constraints that static policies can't express:
 | `warmor-policy-merge` | Merge multiple policies with conflict resolution |
 | `warmor-policy-bundle` | Package policies into signed OCI bundles |
 | `warmor-oci-hook` | Container runtime hook (containerd/CRI-O integration) |
+| `warmor-dashboard` | Real-time SSE dashboard (policy decisions, counters) |
 
 ---
 
@@ -238,7 +239,8 @@ internal/
   platform/       — OS abstraction (Linux eBPF, Windows ETW, macOS ESF)
   crypto/         — mTLS (Ed25519), JWT (HMAC+EdDSA), policy signing
   metrics/        — Prometheus counters, histograms, gauges
-  logging/        — Structured JSON (zerolog)
+  logging/        — Structured JSON (zerolog), Windows Event Viewer integration
+  dashboard/      — Real-time SSE dashboard (ring buffer, embedded HTML)
 ```
 
 See [Architecture Deep Dive](docs/architecture.md) for data flow diagrams.
@@ -257,7 +259,7 @@ See [Architecture Deep Dive](docs/architecture.md) for data flow diagrams.
 | **Intelligence** | [Learning Mode](docs/learning-mode.md) &bull; [Simulator](docs/policy-simulator.md) &bull; [Escape Detection](docs/escape-detection.md) &bull; [Supply Chain](docs/supply-chain-integrity.md) |
 | **Fleet** | [Canary Rollout](docs/canary-rollout.md) &bull; [Drift Detection](docs/drift-detection.md) &bull; [Attack Graph](docs/attack-graph.md) &bull; [Blast Radius](docs/blast-radius.md) &bull; [Temporal](docs/temporal-policies.md) |
 | **Kubernetes** | [CRD Usage](docs/crd-usage.md) &bull; [Helm Chart](deploy/helm/warmor/) |
-| **Project** | [Overview & Roadmap](docs/OVERVIEW.md) &bull; [PRD](docs/PRD.md) |
+| **Project** | [Overview & Roadmap](docs/OVERVIEW.md) &bull; [Roadmap](docs/ROADMAP.md) &bull; [PRD](docs/PRD.md) |
 
 ---
 

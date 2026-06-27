@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warmor Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1419; color: #e6e9ed; padding: 1rem; }
+h1 { font-size: 1.4rem; margin-bottom: 1rem; color: #4fc3f7; }
+.status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem; }
+.status.connected { background: #1b5e20; color: #a5d6a7; }
+.status.disconnected { background: #b71c1c; color: #ef9a9a; }
+.counters { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.counter { background: #1e272e; border-radius: 8px; padding: 1rem 1.5rem; flex: 1; text-align: center; }
+.counter .value { font-size: 2rem; font-weight: bold; }
+.counter.allow .value { color: #66bb6a; }
+.counter.deny .value { color: #ef5350; }
+.counter.log .value { color: #ffa726; }
+.counter .label { font-size: 0.8rem; color: #90a4ae; margin-top: 0.25rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid #263238; }
+th { background: #1e272e; color: #90a4ae; position: sticky; top: 0; }
+tr:hover { background: #1e272e; }
+.action-allow { color: #66bb6a; }
+.action-deny { color: #ef5350; font-weight: bold; }
+.action-log { color: #ffa726; }
+#events { max-height: 60vh; overflow-y: auto; }
+</style>
+</head>
+<body>
+<h1>Warmor <span id="conn-status" class="status disconnected">disconnected</span></h1>
+<div class="counters">
+  <div class="counter allow"><div class="value" id="cnt-allow">0</div><div class="label">Allowed</div></div>
+  <div class="counter deny"><div class="value" id="cnt-deny">0</div><div class="label">Denied</div></div>
+  <div class="counter log"><div class="value" id="cnt-log">0</div><div class="label">Logged</div></div>
+</div>
+<div id="events">
+<table>
+<thead><tr><th>Time</th><th>PID</th><th>Comm</th><th>Action</th><th>Reason</th></tr></thead>
+<tbody id="event-body"></tbody>
+</table>
+</div>
+<script>
+(function() {
+  var allow = 0, deny = 0, logged = 0;
+  var tbody = document.getElementById('event-body');
+  var status = document.getElementById('conn-status');
+  var maxRows = 200;
+
+  function connect() {
+    var es = new EventSource('/dashboard/events');
+    es.onopen = function() {
+      status.textContent = 'connected';
+      status.className = 'status connected';
+    };
+    es.addEventListener('policy_eval', function(e) {
+      var d = JSON.parse(e.data);
+      if (d.action === 'ALLOW') { allow++; document.getElementById('cnt-allow').textContent = allow; }
+      else if (d.action === 'DENY') { deny++; document.getElementById('cnt-deny').textContent = deny; }
+      else { logged++; document.getElementById('cnt-log').textContent = logged; }
+      var row = document.createElement('tr');
+      var cls = d.action === 'ALLOW' ? 'action-allow' : d.action === 'DENY' ? 'action-deny' : 'action-log';
+      row.innerHTML = '<td>' + new Date(d.time).toLocaleTimeString() + '</td><td>' + (d.pid||'') + '</td><td>' + (d.comm||'') + '</td><td class="' + cls + '">' + d.action + '</td><td>' + (d.reason||'') + '</td>';
+      tbody.insertBefore(row, tbody.firstChild);
+      while (tbody.children.length > maxRows) { tbody.removeChild(tbody.lastChild); }
+    });
+    es.onerror = function() {
+      status.textContent = 'disconnected';
+      status.className = 'status disconnected';
+      es.close();
+      setTimeout(connect, 3000);
+    };
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

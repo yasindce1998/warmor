@@ -89,6 +89,26 @@
 
 ---
 
+## Infrastructure Improvements
+
+### Windows Service & Event Viewer
+- Native Windows Service support via `warmor-daemon service install/uninstall`
+- Runs as "Warmor Security Enforcer" with automatic start
+- Logs to Windows Event Viewer (Application log, source "warmor")
+
+### Real-Time Dashboard
+- Server-Sent Events (SSE) dashboard at `/dashboard`
+- Live policy decision counters (allow/deny/log)
+- Ring buffer for event history replay to new clients
+- Embedded HTML via `embed.FS` — no external dependencies
+
+### CI & Coverage
+- macOS CI workflow (`.github/workflows/macos-ci.yml`) with `CGO_ENABLED=1` for ESF
+- Coverage gating at 40% threshold across all platform CI workflows (Linux, Windows, macOS)
+- Builds fail if coverage drops below threshold
+
+---
+
 ## Key Metrics
 
 | Metric | Target | Achieved |
@@ -111,6 +131,7 @@
 - **[macOS Guide](PLATFORM_MACOS.md)** — Beta ESF platform
 - **[Security Posture](SECURITY_POSTURE.md)** — Fail-open vs fail-closed behavior
 - **[BPF Compatibility](BPF_COMPATIBILITY.md)** — Kernel version matrix
+- **[Roadmap](ROADMAP.md)** — Future enhancements and planned features
 
 ### Phase 9: Security Intelligence
 - **[Learning Mode](learning-mode.md)** — Live policy synthesis from container behavior

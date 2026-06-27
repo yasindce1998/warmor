@@ -522,12 +522,24 @@ log show --predicate 'process == "warmor-daemon"' --last 5m
 - [ ] Network AUTH events
 - [ ] Container support (Docker for Mac)
 
-### Phase 8 (Future)
+### Phase 8 (In Progress)
+- [x] macOS CI workflow (`.github/workflows/macos-ci.yml`)
+- [x] Coverage gating at 40% threshold
 - [ ] GUI management app
 - [ ] Preference pane
 - [ ] Automatic updates
 - [ ] Cloud integration
 - [ ] MDM integration
+
+## Continuous Integration
+
+macOS builds are validated on every push and PR via `.github/workflows/macos-ci.yml`:
+
+- **Runner:** `macos-latest`
+- **Build:** `CGO_ENABLED=1 go build ./...` (CGO required for ESF platform code)
+- **Tests:** `go test -race -short -coverprofile=coverage.out ./...`
+- **Coverage Gate:** Fails the build if total coverage drops below 40%
+- **Scope:** Tests requiring Endpoint Security entitlements are skipped via `-short`
 
 ## Contributing
 

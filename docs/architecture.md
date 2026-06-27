@@ -1,8 +1,8 @@
 # warmor Architecture
 
-**Version:** 1.5.0-beta  
-**Last Updated:** 2026-06-16  
-**Status:** Phase 8 Complete — mTLS, CLI, Container Runtime, Observability
+**Version:** 2.0.0-beta  
+**Last Updated:** 2026-06-27  
+**Status:** Phase 9 Complete — Windows Service, Event Viewer, SSE Dashboard, Coverage Gating
 
 ---
 
@@ -63,8 +63,9 @@ Traditional security enforcers are platform-specific:
 │  ┌────────────────────────────────────────────────────┐     │
 │  │         Observability & Caching                    │     │
 │  │  - Prometheus metrics                              │     │
-│  │  - Structured logging                              │     │
+│  │  - Structured logging (+ Event Viewer on Windows)  │     │
 │  │  - LRU decision cache                              │     │
+│  │  - Real-time SSE dashboard                         │     │
 │  └────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────┘
 ```
