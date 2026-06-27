@@ -188,7 +188,9 @@ func TestNewClient_GetsHistory(t *testing.T) {
 			line := scanner.Text()
 			if strings.HasPrefix(line, "data: ") {
 				var e Event
-				json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &e)
+				if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &e); err != nil {
+					continue
+				}
 				events = append(events, e)
 				if len(events) >= 2 {
 					close(done)

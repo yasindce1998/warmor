@@ -43,7 +43,7 @@ func TestHandleStart_BindsPolicy(t *testing.T) {
 			t.Errorf("unexpected method: %s", r.Method)
 		}
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &receivedBody)
+		_ = json.Unmarshal(body, &receivedBody)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -75,7 +75,7 @@ func TestHandleStart_InfersFromImage(t *testing.T) {
 	var receivedBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &receivedBody)
+		_ = json.Unmarshal(body, &receivedBody)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -126,7 +126,7 @@ func TestHandleStart_AnnotationPriority(t *testing.T) {
 	var receivedBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		json.Unmarshal(body, &receivedBody)
+		_ = json.Unmarshal(body, &receivedBody)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
