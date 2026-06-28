@@ -17,6 +17,12 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -25,22 +31,65 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build binary
+      - name: Build all binaries
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
-            -o warmor-daemon-${{ matrix.goos }}-${{ matrix.goarch }} \
-            ./cmd/warmor-daemon
+          VERSION="${{ github.ref_name }}"
+          EXT=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            EXT=".exe"
+          fi
 
-      - name: Create checksum
-        run: sha256sum warmor-daemon-${{ matrix.goos }}-${{ matrix.goarch }} > warmor-daemon-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+          OUTDIR="dist/warmor-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          mkdir -p "$OUTDIR"
 
-      - name: Upload to Release
+          TOOLS=(
+            warmor-daemon
+            warmorctl
+            warmor-server
+            warmor-compile
+            warmor-learn
+            warmor-simulate
+            warmor-policy-gen
+            warmor-policy-merge
+            warmor-policy-diff
+            warmor-policy-bundle
+            warmor-integrity-scan
+            warmor-sbom-policy
+            warmor-oci-hook
+          )
+
+          for tool in "${TOOLS[@]}"; do
+            echo "Building ${tool}..."
+            go build -ldflags="-s -w -X main.version=${VERSION}" \
+              -o "${OUTDIR}/${tool}${EXT}" \
+              "./cmd/${tool}"
+          done
+
+      - name: Create checksums
+        run: |
+          VERSION="${{ github.ref_name }}"
+          OUTDIR="dist/warmor-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          cd "$OUTDIR"
+          sha256sum * > SHA256SUMS
+
+      - name: Create archive
+        run: |
+          VERSION="${{ github.ref_name }}"
+          OUTDIR="warmor-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          cd dist
+
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip -r "${OUTDIR}.zip" "$OUTDIR"
+          else
+            tar -czf "${OUTDIR}.tar.gz" "$OUTDIR"
+          fi
+
+      - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            warmor-daemon-${{ matrix.goos }}-${{ matrix.goarch }}
-            warmor-daemon-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+            dist/warmor-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}.*
