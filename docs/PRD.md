@@ -2,7 +2,7 @@
 
 **Project Name:** warmor (WebAssembly + Armor)  
 **Tagline:** Cross-platform, Wasm-powered system-level security enforcer  
-**Version:** 2.0.0-beta  
+**Version:** 0.1.0  
 **Date:** 2026-06-28  
 **Status:** Phase 9 Complete
 
@@ -1215,7 +1215,7 @@ Planned enhancements beyond the current release. Tracked here as the single sour
 
 ---
 
-**Document Version:** 2.0.0-beta  
+**Document Version:** 0.1.0  
 **Last Updated:** 2026-06-28  
 **Status:** Phase 9 Complete  
 **Next Review:** After Future Roadmap (§7.1) scoping

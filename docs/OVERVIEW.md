@@ -1,6 +1,6 @@
 # warmor Project Status
 
-**Version:** 2.0.0-beta  
+**Version:** 0.1.0  
 **Last Updated:** 2026-06-19  
 **Status:** Phase 9 Complete — Autonomous Security Intelligence
 

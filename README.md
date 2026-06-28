@@ -13,7 +13,7 @@
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go" alt="Go"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-1.70+-orange?style=flat&logo=rust" alt="Rust"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
-  <a href="docs/OVERVIEW.md"><img src="https://img.shields.io/badge/Status-v2.0--beta-yellow" alt="Status"></a>
+  <a href="docs/OVERVIEW.md"><img src="https://img.shields.io/badge/Status-v0.1.0--pre--stable-yellow" alt="Status"></a>
   <a href="docs/PLATFORM_LINUX.md"><img src="https://img.shields.io/badge/Linux-eBPF%20%2B%20LSM-brightgreen" alt="Linux"></a>
   <a href="docs/PLATFORM_WINDOWS.md"><img src="https://img.shields.io/badge/Windows-ETW%20%2B%20eBPF-yellow" alt="Windows"></a>
   <a href="docs/PLATFORM_MACOS.md"><img src="https://img.shields.io/badge/macOS-ESF-yellow" alt="macOS"></a>
@@ -290,6 +290,6 @@ MIT License. See [LICENSE](LICENSE).
 ---
 
 <p align="center">
-  <strong>Warmor v2.0-beta</strong> — From policy enforcement to autonomous security intelligence.<br>
+  <strong>Warmor v0.1.0</strong> — From policy enforcement to autonomous security intelligence.<br>
   <a href="https://github.com/yasindce1998/warmor/issues">Issues</a> &bull; <a href="https://github.com/yasindce1998/warmor/discussions">Discussions</a>
 </p>
