@@ -146,6 +146,7 @@ type EBPFLoader struct {
 	links       []ebpfLink
 	ringBuf     ringBuffer
 	eventMapFd  int
+	policyMapFd int // fd for the "policy_map" BPF hash map (enforcement)
 
 	eventChan   chan<- *api.Event
 	stopChan    chan struct{}
@@ -171,9 +172,10 @@ func NewEBPFLoader(programDir string) (*EBPFLoader, error) {
 	}
 
 	return &EBPFLoader{
-		programDir: programDir,
-		stopChan:   make(chan struct{}),
-		eventMapFd: -1,
+		programDir:  programDir,
+		stopChan:    make(chan struct{}),
+		eventMapFd:  -1,
+		policyMapFd: -1,
 	}, nil
 }
 
@@ -265,6 +267,20 @@ func (l *EBPFLoader) loadLibbpf(ctx context.Context, objPath string) error {
 		log.Printf("eBPF: found events map (fd=%d)", l.eventMapFd)
 	} else {
 		log.Println("eBPF: warning: 'events' map not found in object; event delivery unavailable")
+	}
+
+	// Find the policy enforcement map
+	policyMapName, _ := windows.UTF16PtrFromString("policy_map")
+	policyMapPtr, _, _ := procBpfObjectFindMapByName.Call(
+		uintptr(l.object),
+		uintptr(unsafe.Pointer(policyMapName)),
+	)
+	if policyMapPtr != 0 {
+		fd, _, _ := procBpfMapFd.Call(policyMapPtr)
+		l.policyMapFd = int(fd)
+		log.Printf("eBPF: found policy_map (fd=%d) — kernel enforcement available", l.policyMapFd)
+	} else {
+		log.Println("eBPF: policy_map not found; kernel enforcement unavailable")
 	}
 
 	l.loaded = true

@@ -14,8 +14,9 @@ import (
 
 // Monitoring modes
 const (
-	ModeEBPF = "ebpf"
-	ModeETW  = "etw"
+	ModeEBPF   = "ebpf"
+	ModeETW    = "etw"
+	ModeHybrid = "hybrid" // eBPF for network + ETW for process/file
 )
 
 // WindowsPlatform implements Platform for Windows using ETW
@@ -25,7 +26,7 @@ type WindowsPlatform struct {
 	ebpfLoader  *etw.EBPFLoader
 	eventChan   chan<- *api.Event
 	stopChan    chan struct{}
-	mode        string // "etw" or "ebpf"
+	mode        string // "etw", "ebpf", or "hybrid"
 }
 
 // NewWindowsPlatform creates a new Windows platform
@@ -44,44 +45,56 @@ func (p *WindowsPlatform) Load(ctx context.Context) error {
 	log.Println("Windows platform: Initializing monitoring")
 	log.Println("Note: Windows support is EXPERIMENTAL/BETA")
 
-	// Step 1: Try to detect and use eBPF-for-Windows
+	// Step 1: Try to detect eBPF-for-Windows
 	ebpfAvailable, err := etw.DetectEBPFForWindows()
 	if err != nil {
 		log.Printf("Warning: Failed to detect eBPF-for-Windows: %v", err)
 	}
 
+	ebpfOK := false
 	if ebpfAvailable != nil && ebpfAvailable.Available {
 		log.Println("✓ eBPF-for-Windows detected!")
 		log.Printf("  Service: %v", ebpfAvailable.ServiceRunning)
 		log.Printf("  Driver: %v", ebpfAvailable.DriverLoaded)
 		log.Printf("  Version: %s", ebpfAvailable.Version)
 
-		// Try to initialize eBPF-for-Windows
 		if err := p.initializeEBPF(ctx); err != nil {
 			log.Printf("⚠ Failed to initialize eBPF-for-Windows: %v", err)
-			log.Println("⚠ Falling back to ETW...")
-			p.mode = ModeETW
+			log.Println("⚠ eBPF unavailable, will use ETW only")
 		} else {
-			log.Println("✓ Using eBPF-for-Windows mode")
-			p.mode = ModeEBPF
-			return nil
+			ebpfOK = true
 		}
 	} else {
 		log.Println("ℹ eBPF-for-Windows not available")
 		if ebpfAvailable != nil && ebpfAvailable.ErrorMessage != "" {
 			log.Printf("  Reason: %s", ebpfAvailable.ErrorMessage)
 		}
-		log.Println("ℹ Using ETW mode")
-		p.mode = ModeETW
 	}
 
-	// Step 2: Fall back to ETW
+	// Step 2: Initialize ETW consumer (needed for hybrid and ETW-only modes)
 	log.Println("Initializing ETW consumer...")
 	consumer, err := etw.NewConsumer("WarmorETWSession")
 	if err != nil {
+		if ebpfOK {
+			// eBPF works but ETW failed — pure eBPF mode
+			log.Printf("⚠ ETW init failed: %v; running eBPF-only mode", err)
+			p.mode = ModeEBPF
+			log.Printf("✓ Windows platform loaded in %s mode", p.mode)
+			return nil
+		}
 		return fmt.Errorf("create ETW consumer: %w", err)
 	}
 	p.etwConsumer = consumer
+
+	// Step 3: Select mode based on what's available
+	if ebpfOK {
+		// Hybrid: eBPF for network (kernel enforcement) + ETW for process/file
+		p.mode = ModeHybrid
+		log.Println("✓ Using hybrid mode: eBPF (network) + ETW (process/file)")
+	} else {
+		p.mode = ModeETW
+		log.Println("✓ Using ETW-only mode")
+	}
 
 	log.Printf("✓ Windows platform loaded in %s mode", p.mode)
 	return nil
@@ -90,95 +103,126 @@ func (p *WindowsPlatform) Load(ctx context.Context) error {
 func (p *WindowsPlatform) Start(ctx context.Context, eventChan chan<- *api.Event) error {
 	p.eventChan = eventChan
 
-	// eBPF mode
-	if p.mode == ModeEBPF && p.ebpfLoader != nil {
+	switch p.mode {
+	case ModeEBPF:
+		if p.ebpfLoader == nil {
+			return fmt.Errorf("platform not loaded")
+		}
 		if err := p.ebpfLoader.Start(ctx, eventChan); err != nil {
 			return fmt.Errorf("start eBPF loader: %w", err)
 		}
-
 		log.Println("Enabling eBPF process monitoring...")
 		if err := p.ebpfLoader.EnableProcessMonitoring(); err != nil {
 			log.Printf("Warning: Failed to enable eBPF process monitoring: %v", err)
 		}
-
 		log.Println("Enabling eBPF file monitoring...")
 		if err := p.ebpfLoader.EnableFileMonitoring(); err != nil {
 			log.Printf("Warning: Failed to enable eBPF file monitoring: %v", err)
 		}
-
 		log.Println("Enabling eBPF network monitoring...")
 		if err := p.ebpfLoader.EnableNetworkMonitoring(); err != nil {
 			log.Printf("Warning: Failed to enable eBPF network monitoring: %v", err)
 		}
-
 		log.Println("Windows platform started successfully (eBPF mode)")
-		return nil
+
+	case ModeHybrid:
+		// eBPF handles network (kernel-level enforcement via SOCK_OPS)
+		if p.ebpfLoader == nil {
+			return fmt.Errorf("hybrid mode requires eBPF loader")
+		}
+		if err := p.ebpfLoader.Start(ctx, eventChan); err != nil {
+			return fmt.Errorf("start eBPF loader: %w", err)
+		}
+		log.Println("Enabling eBPF network monitoring (kernel enforcement)...")
+		if err := p.ebpfLoader.EnableNetworkMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable eBPF network monitoring: %v", err)
+		}
+
+		// ETW handles process + file (most reliable on Windows)
+		if p.etwConsumer == nil {
+			return fmt.Errorf("hybrid mode requires ETW consumer")
+		}
+		if err := p.etwConsumer.Start(ctx, eventChan); err != nil {
+			return fmt.Errorf("start ETW consumer: %w", err)
+		}
+		log.Println("Enabling ETW process monitoring...")
+		if err := p.etwConsumer.EnableProcessMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable process monitoring: %v", err)
+		}
+		log.Println("Enabling ETW file monitoring...")
+		if err := p.etwConsumer.EnableFileMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable file monitoring: %v", err)
+		}
+		log.Println("Windows platform started successfully (hybrid mode)")
+
+	default: // ModeETW
+		if p.etwConsumer == nil {
+			return fmt.Errorf("platform not loaded")
+		}
+		if err := p.etwConsumer.Start(ctx, eventChan); err != nil {
+			return fmt.Errorf("start ETW consumer: %w", err)
+		}
+		log.Println("Enabling process monitoring...")
+		if err := p.etwConsumer.EnableProcessMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable process monitoring: %v", err)
+		}
+		log.Println("Enabling file monitoring...")
+		if err := p.etwConsumer.EnableFileMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable file monitoring: %v", err)
+		}
+		log.Println("Enabling network monitoring...")
+		if err := p.etwConsumer.EnableNetworkMonitoring(); err != nil {
+			log.Printf("Warning: Failed to enable network monitoring: %v", err)
+		}
+		log.Println("Windows platform started successfully (ETW mode)")
 	}
 
-	// ETW mode
-	if p.etwConsumer == nil {
-		return fmt.Errorf("platform not loaded")
-	}
-
-	if err := p.etwConsumer.Start(ctx, eventChan); err != nil {
-		return fmt.Errorf("start ETW consumer: %w", err)
-	}
-
-	log.Println("Enabling process monitoring...")
-	if err := p.etwConsumer.EnableProcessMonitoring(); err != nil {
-		log.Printf("Warning: Failed to enable process monitoring: %v", err)
-	}
-
-	log.Println("Enabling file monitoring...")
-	if err := p.etwConsumer.EnableFileMonitoring(); err != nil {
-		log.Printf("Warning: Failed to enable file monitoring: %v", err)
-	}
-
-	log.Println("Enabling network monitoring...")
-	if err := p.etwConsumer.EnableNetworkMonitoring(); err != nil {
-		log.Printf("Warning: Failed to enable network monitoring: %v", err)
-	}
-
-	log.Println("Windows platform started successfully (ETW mode)")
 	return nil
 }
 
 func (p *WindowsPlatform) Stop() error {
 	close(p.stopChan)
+	var firstErr error
 	if p.ebpfLoader != nil {
-		return p.ebpfLoader.Stop()
+		if err := p.ebpfLoader.Stop(); err != nil {
+			firstErr = err
+		}
 	}
 	if p.etwConsumer != nil {
-		return p.etwConsumer.Stop()
+		if err := p.etwConsumer.Stop(); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
-	return nil
+	return firstErr
 }
 
 func (p *WindowsPlatform) Close() error {
+	var firstErr error
 	if p.ebpfLoader != nil {
-		return p.ebpfLoader.Stop()
+		if err := p.ebpfLoader.Stop(); err != nil {
+			firstErr = err
+		}
 	}
 	if p.etwConsumer != nil {
-		return p.etwConsumer.Stop()
+		if err := p.etwConsumer.Stop(); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
-	return nil
+	return firstErr
 }
 
 func (p *WindowsPlatform) Capabilities() Capabilities {
-	if p.mode == ModeEBPF {
-		return Capabilities{
-			ProcessMonitoring: true,
-			FileMonitoring:    true,
-			NetworkMonitoring: true,
-			Enforcement:       true, // eBPF can enforce via program return codes
-		}
+	caps := Capabilities{
+		ProcessMonitoring: true,
+		FileMonitoring:    true,
+		NetworkMonitoring: true,
+		Enforcement:       true,
 	}
-	return Capabilities{
-		ProcessMonitoring: true,  // ETW process events
-		FileMonitoring:    true,  // ETW file events (limited)
-		NetworkMonitoring: true,  // ETW network events
-		Enforcement:       true, // Post-facto enforcement via Win32 TerminateProcess
+	// Enable LSM enforcement when eBPF policy map is available
+	if p.ebpfLoader != nil && p.ebpfLoader.PolicyMapAvailable() {
+		caps.LSMEnforcement = true
 	}
+	return caps
 }
 
 // initializeEBPF initializes eBPF-for-Windows monitoring
@@ -196,8 +240,12 @@ func (p *WindowsPlatform) initializeEBPF(ctx context.Context) error {
 	return nil
 }
 
-// PolicyMap returns nil — Windows does not support LSM-BPF.
+// PolicyMap returns the eBPF policy map syncer when available,
+// enabling kernel-level enforcement via the BPF hash map.
 func (p *WindowsPlatform) PolicyMap() any {
+	if p.ebpfLoader != nil && p.ebpfLoader.PolicyMapAvailable() {
+		return p.ebpfLoader.GetPolicyMap()
+	}
 	return nil
 }
 
