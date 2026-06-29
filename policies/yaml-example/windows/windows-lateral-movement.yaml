@@ -1,0 +1,166 @@
+name: windows-lateral-movement
+version: 1
+description: "Detect and block lateral movement techniques on Windows (PsExec, WMI, RDP, WinRM, SMB)"
+
+variables:
+  remote_exec_tools:
+    - "psexec.exe"
+    - "psexec64.exe"
+    - "paexec.exe"
+    - "remcom.exe"
+    - "csexec.exe"
+    - "smbexec.py"
+  winrm_binaries:
+    - "winrs.exe"
+    - "winrm.cmd"
+    - "wsmprovhost.exe"
+  rdp_binaries:
+    - "mstsc.exe"
+    - "tsclient"
+  admin_shares:
+    - "\\C$"
+    - "\\ADMIN$"
+    - "\\IPC$"
+  lateral_ports:
+    - 135   # RPC
+    - 139   # NetBIOS
+    - 445   # SMB
+    - 3389  # RDP
+    - 5985  # WinRM HTTP
+    - 5986  # WinRM HTTPS
+
+rules:
+  # Block PsExec and variants
+  - name: block-psexec
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: $remote_exec_tools }
+    action: deny
+    reason: "Remote execution tool blocked (PsExec/variant)"
+
+  # Block PsExec service creation pattern
+  - name: block-psexec-service
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "sc.exe" }
+        - args: { any_of: ["\\\\", "create", "psexesvc", "PSEXESVC"] }
+    action: deny
+    reason: "Remote service creation (PsExec pattern)"
+
+  # Block WMI remote process creation
+  - name: block-wmi-remote-exec
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["wmic.exe", "wmiprvse.exe"] }
+        - args: { any_of: ["/node:", "process call create", "Win32_Process"] }
+    action: deny
+    reason: "WMI remote process creation (lateral movement)"
+
+  # Block WinRM remote shell
+  - name: block-winrm-remote
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: $winrm_binaries }
+        - args: { any_of: ["-r:", "/r:", "-remote"] }
+    action: deny
+    reason: "WinRM remote shell session"
+
+  # Audit admin share access
+  - name: audit-admin-share-access
+    event: file
+    conditions:
+      all:
+        - path: { any_of: $admin_shares }
+    action: log
+    reason: "Administrative share access (C$/ADMIN$/IPC$)"
+
+  # Block scheduled task creation on remote hosts
+  - name: block-remote-schtask
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "schtasks.exe" }
+        - args: { any_of: ["/create", "/s \\\\", "/S \\\\"] }
+    action: deny
+    reason: "Remote scheduled task creation (lateral movement)"
+
+  # Block DCOM-based remote execution
+  - name: block-dcom-exec
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "mmc.exe" }
+        - args: { contains: "-Embedding" }
+    action: log
+    reason: "MMC DCOM instantiation (potential lateral movement via DCOM)"
+
+  # Block net use to admin shares
+  - name: block-net-use-admin
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "net.exe" }
+        - args: { any_of: ["use \\\\", "use /d \\\\"] }
+    action: log
+    reason: "Network share mapping (recon or lateral movement)"
+
+  # Block SMB outbound to non-internal hosts (hybrid mode: kernel enforcement)
+  - name: block-smb-external
+    event: network
+    conditions:
+      all:
+        - remote_port: { eq: 445 }
+    action: log
+    reason: "Outbound SMB connection (lateral movement or exfiltration risk)"
+
+  # Block RDP outbound connections
+  - name: audit-rdp-outbound
+    event: network
+    conditions:
+      all:
+        - remote_port: { eq: 3389 }
+    action: log
+    reason: "Outbound RDP connection (lateral movement indicator)"
+
+  # Block WinRM outbound connections
+  - name: block-winrm-outbound
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [5985, 5986] }
+    action: deny
+    reason: "Outbound WinRM connection (remote execution)"
+
+  # Block pass-the-hash via sekurlsa
+  - name: block-pth-tools
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["sekurlsa.exe", "wce.exe", "pth-winexe"] }
+    action: deny
+    reason: "Pass-the-hash tool blocked"
+
+  # Audit RPC endpoint mapper connections
+  - name: audit-rpc-endpoint
+    event: network
+    conditions:
+      all:
+        - remote_port: { eq: 135 }
+    action: log
+    reason: "RPC endpoint mapper connection (recon/lateral movement)"
+
+  # Block impacket-style named pipe creation
+  - name: block-named-pipe-exec
+    event: file
+    conditions:
+      all:
+        - path: { glob: "\\\\*\\pipe\\*" }
+        - operation: { eq: "create" }
+    action: log
+    reason: "Named pipe creation (possible impacket/C2 communication)"
+
+default_action: allow

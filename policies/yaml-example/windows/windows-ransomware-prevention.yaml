@@ -1,0 +1,171 @@
+name: windows-ransomware-prevention
+version: 1
+description: "Detect and block ransomware behaviors on Windows (shadow copy deletion, mass encryption, backup destruction)"
+
+variables:
+  backup_destruction_tools:
+    - "vssadmin.exe"
+    - "wbadmin.exe"
+    - "bcdedit.exe"
+    - "wmic.exe"
+  recovery_disabling_tools:
+    - "reagentc.exe"
+    - "sfc.exe"
+  ransomware_extensions:
+    - ".encrypted"
+    - ".locked"
+    - ".crypto"
+    - ".crypt"
+    - ".enc"
+    - ".pay"
+    - ".ransom"
+  ransom_note_names:
+    - "README_DECRYPT"
+    - "HOW_TO_RECOVER"
+    - "DECRYPT_FILES"
+    - "RESTORE_FILES"
+    - "YOUR_FILES"
+    - "RANSOM_NOTE"
+
+rules:
+  # Block volume shadow copy deletion (T1490)
+  - name: block-vss-delete
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "vssadmin.exe" }
+        - args: { any_of: ["delete shadows", "resize shadowstorage"] }
+    action: deny
+    reason: "Volume shadow copy deletion (ransomware indicator)"
+
+  # Block WMI shadow copy deletion
+  - name: block-wmi-vss-delete
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "wmic.exe" }
+        - args: { contains: "shadowcopy delete" }
+    action: deny
+    reason: "WMI shadow copy deletion (ransomware technique)"
+
+  # Block PowerShell shadow copy deletion
+  - name: block-ps-vss-delete
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["powershell.exe", "pwsh.exe"] }
+        - args: { any_of: ["Win32_ShadowCopy", "Delete()", "vssadmin"] }
+    action: deny
+    reason: "PowerShell shadow copy manipulation (ransomware)"
+
+  # Block bcdedit recovery disabling
+  - name: block-bcdedit-recovery
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "bcdedit.exe" }
+        - args: { any_of: ["recoveryenabled No", "bootstatuspolicy ignoreallfailures", "safeboot"] }
+    action: deny
+    reason: "Boot recovery disabled via bcdedit (ransomware technique)"
+
+  # Block wbadmin backup deletion
+  - name: block-wbadmin-delete
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "wbadmin.exe" }
+        - args: { any_of: ["delete catalog", "delete systemstatebackup", "delete backup"] }
+    action: deny
+    reason: "Windows backup deletion via wbadmin (anti-recovery)"
+
+  # Block Windows Recovery Environment disabling
+  - name: block-reagentc-disable
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "reagentc.exe" }
+        - args: { contains: "/disable" }
+    action: deny
+    reason: "Recovery environment disabled (ransomware anti-recovery)"
+
+  # Block cipher.exe /w (secure wipe of free space to prevent recovery)
+  - name: block-cipher-wipe
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "cipher.exe" }
+        - args: { contains: "/w:" }
+    action: deny
+    reason: "Free space wipe via cipher.exe (anti-forensics/ransomware)"
+
+  # Detect ransom note creation
+  - name: detect-ransom-note
+    event: file
+    conditions:
+      all:
+        - path: { any_of: $ransom_note_names }
+        - operation: { any_of: ["create", "write"] }
+    action: deny
+    reason: "Ransom note file creation detected"
+
+  # Block icacls permission modification (ransomware takes ownership)
+  - name: block-icacls-takeover
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "icacls.exe" }
+        - args: { any_of: ["/grant Everyone:F", "/T /C /Q", "Everyone:(OI)(CI)F"] }
+    action: deny
+    reason: "Mass file permission change via icacls (ransomware)"
+
+  # Block attrib +h +s for hiding ransomware artifacts
+  - name: block-attrib-hide
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "attrib.exe" }
+        - args: { any_of: ["+h +s", "+s +h", "+h +s +r"] }
+    action: log
+    reason: "File attribute hiding (potential ransomware artifact)"
+
+  # Block net stop of security services
+  - name: block-stop-security-services
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["net.exe", "sc.exe"] }
+        - args: { any_of: ["stop \"Windows Defender\"", "stop WinDefend", "stop MpsSvc", "stop wscsvc", "stop SecurityHealthService", "stop Sense", "stop WdNisSvc"] }
+    action: deny
+    reason: "Security service termination (defense evasion)"
+
+  # Block taskkill of security processes
+  - name: block-kill-security-procs
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "taskkill.exe" }
+        - args: { any_of: ["MsMpEng", "MpCmdRun", "SecurityHealth", "SenseIR", "SenseCncProxy"] }
+    action: deny
+    reason: "Security process termination attempt"
+
+  # Block registry disabling of Windows Defender
+  - name: block-defender-disable-reg
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "reg.exe" }
+        - args: { any_of: ["DisableAntiSpyware", "DisableRealtimeMonitoring", "DisableBehaviorMonitoring", "DisableIOAVProtection"] }
+    action: deny
+    reason: "Windows Defender disabled via registry (defense evasion)"
+
+  # Block network shares for propagation
+  - name: block-net-share-create
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "net.exe" }
+        - args: { any_of: ["share /grant:everyone", "share /unlimited"] }
+    action: deny
+    reason: "Network share creation with broad permissions (propagation vector)"
+
+default_action: allow

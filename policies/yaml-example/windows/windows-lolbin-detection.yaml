@@ -1,0 +1,176 @@
+name: windows-lolbin-detection
+version: 1
+description: "Detect Living-off-the-Land Binary (LOLBin) abuse on Windows for execution, download, and bypass"
+
+variables:
+  proxy_execution_bins:
+    - "mshta.exe"
+    - "regsvr32.exe"
+    - "rundll32.exe"
+    - "msiexec.exe"
+    - "cmstp.exe"
+    - "wmic.exe"
+    - "forfiles.exe"
+    - "pcalua.exe"
+    - "infdefaultinstall.exe"
+    - "msconfig.exe"
+  download_bins:
+    - "certutil.exe"
+    - "bitsadmin.exe"
+    - "desktopimgdownldr.exe"
+    - "esentutl.exe"
+    - "expand.exe"
+    - "findstr.exe"
+    - "hh.exe"
+    - "ieexec.exe"
+    - "replace.exe"
+  compile_bins:
+    - "csc.exe"
+    - "vbc.exe"
+    - "jsc.exe"
+    - "msbuild.exe"
+    - "installutil.exe"
+    - "regasm.exe"
+    - "regsvcs.exe"
+  recon_bins:
+    - "nltest.exe"
+    - "dsquery.exe"
+    - "net.exe"
+    - "netsh.exe"
+    - "systeminfo.exe"
+    - "whoami.exe"
+    - "ipconfig.exe"
+    - "tasklist.exe"
+    - "qwinsta.exe"
+    - "qprocess.exe"
+
+rules:
+  # Block encoded PowerShell commands (obfuscation)
+  - name: block-powershell-encoded
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["powershell.exe", "pwsh.exe"] }
+        - args: { any_of: ["-enc", "-EncodedCommand", "-e ", "-ec "] }
+    action: deny
+    reason: "PowerShell with encoded command (obfuscation technique)"
+
+  # Block PowerShell download cradles
+  - name: block-powershell-download
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["powershell.exe", "pwsh.exe"] }
+        - args: { any_of: ["DownloadString", "DownloadFile", "Invoke-WebRequest", "iwr ", "wget ", "curl ", "Net.WebClient", "Start-BitsTransfer"] }
+    action: deny
+    reason: "PowerShell download cradle detected"
+
+  # Block PowerShell AMSI bypass attempts
+  - name: block-powershell-amsi-bypass
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["powershell.exe", "pwsh.exe"] }
+        - args: { any_of: ["AmsiUtils", "amsiInitFailed", "AmsiScanBuffer", "SetValue(", "Reflection.Assembly"] }
+    action: deny
+    reason: "PowerShell AMSI bypass attempt"
+
+  # Block certutil for file download/decode (T1105, T1140)
+  - name: block-certutil-download
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "certutil.exe" }
+        - args: { any_of: ["-urlcache", "-decode", "-decodehex", "-verifyctl"] }
+    action: deny
+    reason: "certutil used for download/decode (LOLBin abuse)"
+
+  # Block mshta for script execution
+  - name: block-mshta-remote
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "mshta.exe" }
+        - args: { any_of: ["http://", "https://", "javascript:", "vbscript:"] }
+    action: deny
+    reason: "mshta executing remote/inline script (proxy execution)"
+
+  # Block regsvr32 for proxy execution (Squiblydoo)
+  - name: block-regsvr32-remote
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "regsvr32.exe" }
+        - args: { any_of: ["/s /n /u /i:http", "/i:http", "scrobj.dll"] }
+    action: deny
+    reason: "regsvr32 proxy execution (Squiblydoo technique)"
+
+  # Block wmic for process creation
+  - name: block-wmic-process
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "wmic.exe" }
+        - args: { any_of: ["process call create", "os get", "/node:", "/format:"] }
+    action: deny
+    reason: "WMIC process creation or remote execution"
+
+  # Block bitsadmin for file download
+  - name: block-bitsadmin-download
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "bitsadmin.exe" }
+        - args: { any_of: ["/transfer", "/addfile", "/resume"] }
+    action: deny
+    reason: "BITS transfer abuse for file download"
+
+  # Audit MSBuild/InstallUtil for code compilation (T1127)
+  - name: audit-compile-abuse
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: $compile_bins }
+    action: log
+    reason: "Compilation/install utility (potential AppLocker bypass)"
+
+  # Block cmstp for UAC bypass
+  - name: block-cmstp-bypass
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "cmstp.exe" }
+        - args: { contains: "/s" }
+    action: deny
+    reason: "CMSTP UAC bypass technique"
+
+  # Audit rapid reconnaissance commands
+  - name: audit-recon-burst
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: $recon_bins }
+    action: log
+    reason: "Reconnaissance command (host/network enumeration)"
+
+  # Block cmd.exe spawning from Office processes
+  - name: block-office-cmd-spawn
+    event: process
+    conditions:
+      all:
+        - comm: { any_of: ["cmd.exe", "powershell.exe"] }
+        - parent_comm: { any_of: ["winword.exe", "excel.exe", "outlook.exe", "powerpnt.exe", "msaccess.exe"] }
+    action: deny
+    reason: "Shell spawned from Office application (macro execution)"
+
+  # Block rundll32 with suspicious DLL paths
+  - name: block-rundll32-suspicious
+    event: process
+    conditions:
+      all:
+        - comm: { eq: "rundll32.exe" }
+        - args: { any_of: ["javascript:", "\\AppData\\", "\\Temp\\", "\\Downloads\\"] }
+    action: deny
+    reason: "rundll32 loading DLL from suspicious location"
+
+default_action: allow
