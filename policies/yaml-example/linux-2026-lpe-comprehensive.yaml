@@ -1,0 +1,171 @@
+name: linux-2026-lpe-comprehensive
+version: 1
+description: "Comprehensive defense against 2026 Linux LPE family (CopyFail, Fragnesia, DirtyFrag, CIFSwitch, PinTheft)"
+
+variables:
+  netfilter_tools:
+    - "/usr/sbin/nft"
+    - "/sbin/nft"
+    - "/usr/sbin/iptables"
+    - "/sbin/iptables"
+    - "/usr/sbin/iptables-nft"
+    - "/usr/sbin/ip6tables-nft"
+  bpf_tools:
+    - "/usr/sbin/bpftool"
+    - "/sbin/bpftool"
+    - "/usr/bin/bpftool"
+    - "/usr/sbin/bpftrace"
+    - "/usr/bin/bpftrace"
+  cifs_tools:
+    - "/usr/sbin/mount.cifs"
+    - "/sbin/mount.cifs"
+    - "/usr/sbin/cifs.upcall"
+    - "/sbin/cifs.upcall"
+  namespace_tools:
+    - "/usr/bin/unshare"
+    - "/bin/unshare"
+    - "/usr/bin/nsenter"
+    - "/bin/nsenter"
+  credential_files:
+    - "/etc/shadow"
+    - "/etc/passwd"
+    - "/etc/sudoers"
+    - "/etc/sudoers.d"
+  kernel_info_paths:
+    - "/proc/kallsyms"
+    - "/proc/kcore"
+    - "/proc/modules"
+    - "/sys/kernel/btf/vmlinux"
+
+rules:
+  - name: block-exploit-tmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/*" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: exploit execution from /tmp (common staging for CopyFail/Fragnesia/PinTheft)"
+
+  - name: block-exploit-devshm-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/dev/shm/*" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: exploit execution from /dev/shm (memory-backed staging)"
+
+  - name: block-exploit-vartmp-exec
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/var/tmp/*" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: exploit execution from /var/tmp"
+
+  - name: block-kaslr-bypass
+    event: file
+    conditions:
+      all:
+        - path: { any_of: $kernel_info_paths }
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: kernel info leak (KASLR bypass needed for all 2026 page-cache exploits)"
+
+  - name: protect-credential-writes
+    event: file
+    conditions:
+      all:
+        - path: { any_of: $credential_files }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: credential file write (CopyFail/Fragnesia page-cache overwrite target)"
+
+  - name: block-unprivileged-nft
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $netfilter_tools }
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: netfilter tool (Fragnesia nft-dup/TEE trigger, nftables UAF)"
+
+  - name: block-unprivileged-bpf
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $bpf_tools }
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: BPF tool (DirtyFrag KTLS sockmap creation requires CAP_BPF)"
+
+  - name: block-cifs-mount-unprivileged
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $cifs_tools }
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: CIFS tool (CIFSwitch spnego upcall root exploit trigger)"
+
+  - name: block-modprobe-unprivileged
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/sbin/modprobe", "/usr/sbin/modprobe"] }
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: module load (algif_aead, tls, cifs, esp4/esp6 exploit prerequisites)"
+
+  - name: audit-namespace-creation
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $namespace_tools }
+        - uid: { not: 0 }
+    action: log
+    reason: "2026 LPE: namespace creation (CopyFail/Fragnesia/CIFSwitch all require user namespaces)"
+
+  - name: block-userfaultfd-enable
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/proc/sys/vm/unprivileged_userfaultfd" }
+        - operation: "write"
+    action: deny
+    reason: "2026 LPE: userfaultfd enable (race stabilization for UAF/page-pin exploits)"
+
+  - name: block-bpf-fs-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/sys/fs/bpf/**" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: BPF filesystem write (DirtyFrag sockmap pinning)"
+
+  - name: protect-nsswitch
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/etc/nsswitch.conf" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: nsswitch.conf modification (CIFSwitch rogue NSS module path)"
+
+  - name: protect-nss-libraries
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/lib/x86_64-linux-gnu/libnss_*" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "2026 LPE: NSS library write (CIFSwitch malicious libnss injection)"
+
+default_action: allow
