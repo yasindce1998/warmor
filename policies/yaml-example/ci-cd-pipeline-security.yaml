@@ -1,6 +1,6 @@
-name: ci-cd-pipeline-security
+﻿name: ci-cd-pipeline-security
 version: 1
-description: "Security policy for CI/CD runner containers — restrict build agents to safe operations"
+description: "Security policy for CI/CD runner containers â€” restrict build agents to safe operations"
 
 variables:
   allowed_build_tools:
@@ -83,7 +83,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 80 }
+        - remote_port: { eq: 80 }
     action: log
     reason: "HTTP connection from CI (monitor for metadata endpoint access)"
 
@@ -122,8 +122,8 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/var/run/docker.sock" }
-    action: audit
+        - path: { eq: "/var/run/docker.sock" }
+    action: log
     reason: "Docker socket access in CI (DinD privilege boundary)"
 
 default_action: allow

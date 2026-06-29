@@ -1,4 +1,4 @@
-name: data-exfiltration-prevention
+﻿name: data-exfiltration-prevention
 version: 1
 description: "Prevent data exfiltration via network, DNS tunneling, and unauthorized file transfers"
 
@@ -66,7 +66,7 @@ rules:
     conditions:
       all:
         - path: { any_of: $archive_tools }
-    action: audit
+    action: log
     reason: "Archive tool execution (potential data staging for exfiltration)"
 
   # Block reading sensitive data from containers
@@ -95,7 +95,7 @@ rules:
       all:
         - path: { glob: "/var/lib/postgresql/**" }
         - uid: { not: 999 }
-    action: audit
+    action: log
     reason: "Non-postgres user accessing database files"
 
   - name: audit-mysql-data-access
@@ -104,7 +104,7 @@ rules:
       all:
         - path: { glob: "/var/lib/mysql/**" }
         - uid: { not: 999 }
-    action: audit
+    action: log
     reason: "Non-mysql user accessing database files"
 
   # Block outbound connections on non-standard high ports (C2/exfil channels)
@@ -122,7 +122,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 0 }
+        - remote_port: { eq: 0 }
     action: log
     reason: "Raw socket or ICMP activity (potential tunnel)"
 

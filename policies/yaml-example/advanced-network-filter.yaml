@@ -36,7 +36,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_ip: { any_of: $cloud_metadata_ips }
+        - remote_addr: { any_of: $cloud_metadata_ips }
     action: deny
     reason: "Cloud metadata endpoint access (SSRF risk)"
 
@@ -52,16 +52,16 @@ rules:
     event: network
     conditions:
       all:
-        - remote_ip: { in_cidr: $known_c2_ranges }
+        - remote_port: { any_of: [4444, 5555, 1337, 31337, 8888, 9001] }
     action: deny
-    reason: "Connection to known C2 infrastructure"
+    reason: "Connection to known C2 infrastructure port"
 
   - name: allow-dns
     event: network
     conditions:
       all:
         - remote_port: { any_of: [53, 853] }
-        - remote_ip: { any_of: $dns_resolvers }
+        - remote_addr: { any_of: $dns_resolvers }
     action: allow
     reason: "DNS to approved resolvers"
 
@@ -70,17 +70,16 @@ rules:
     conditions:
       all:
         - remote_port: { any_of: [53, 853] }
-        - remote_ip: { not_any_of: $dns_resolvers }
-    action: deny
-    reason: "DNS to unapproved resolver (possible DNS exfiltration)"
+        - uid: { not: 0 }
+    action: log
+    reason: "DNS query from non-root (monitor for DNS exfiltration)"
 
   - name: audit-unusual-egress
     event: network
     conditions:
       all:
-        - remote_ip: { not_in_cidr: $internal_subnets }
-        - remote_port: { not_any_of: [80, 443, 8080, 8443] }
-    action: audit
+        - remote_port: { none_of: [80, 443, 8080, 8443, 53, 22] }
+    action: log
     reason: "Unusual egress port to external host"
 
 default_action: allow

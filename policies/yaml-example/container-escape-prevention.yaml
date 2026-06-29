@@ -1,4 +1,4 @@
-name: container-escape-prevention
+﻿name: container-escape-prevention
 version: 1
 description: "Prevent common container escape techniques and breakout attempts"
 
@@ -49,7 +49,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/var/run/docker.sock" }
+        - path: { eq: "/var/run/docker.sock" }
     action: deny
     reason: "Docker socket access (container escape via API)"
 
@@ -57,7 +57,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/run/containerd/containerd.sock" }
+        - path: { eq: "/run/containerd/containerd.sock" }
     action: deny
     reason: "Containerd socket access (container escape via API)"
 
@@ -74,7 +74,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/proc/sysrq-trigger" }
+        - path: { eq: "/proc/sysrq-trigger" }
     action: deny
     reason: "SysRq trigger access (host manipulation)"
 
@@ -100,8 +100,8 @@ rules:
     event: process
     conditions:
       all:
-        - comm: { equals: "mount" }
-    action: audit
+        - comm: { eq: "mount" }
+    action: log
     reason: "Mount operation in container"
 
 default_action: allow

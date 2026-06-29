@@ -1,0 +1,135 @@
+name: supply-chain-attack-prevention
+version: 1
+description: "Prevent software supply chain attacks covering malicious package installs, build pipeline compromise, dependency confusion, and CI/CD credential theft (inspired by XZ, polyfill.io, Codecov patterns)"
+
+variables:
+  package_managers:
+    - "/usr/bin/pip"
+    - "/usr/bin/pip3"
+    - "/usr/local/bin/pip"
+    - "/usr/bin/npm"
+    - "/usr/local/bin/npm"
+    - "/usr/bin/yarn"
+    - "/usr/local/bin/yarn"
+    - "/usr/bin/gem"
+    - "/usr/local/bin/gem"
+    - "/usr/bin/cargo"
+    - "/usr/local/bin/cargo"
+    - "/usr/bin/go"
+    - "/usr/local/go/bin/go"
+  build_tools:
+    - "/usr/bin/make"
+    - "/usr/bin/cmake"
+    - "/usr/bin/gcc"
+    - "/usr/bin/g++"
+    - "/usr/bin/cc"
+  ci_credential_paths:
+    - "/home/*/.docker/config.json"
+    - "/home/*/.aws/credentials"
+    - "/home/*/.kube/config"
+    - "/home/*/.npmrc"
+    - "/home/*/.pypirc"
+    - "/root/.docker/config.json"
+    - "/root/.aws/credentials"
+
+rules:
+  - name: audit-package-install
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $package_managers }
+    action: log
+    reason: "Supply chain: package manager invocation (install/update monitoring)"
+
+  - name: block-postinstall-shell
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/bin/bash", "/bin/sh", "/bin/dash"] }
+        - uid: { any_of: [33, 48, 1000, 1001] }
+    action: log
+    reason: "Supply chain: shell spawn during package install (malicious postinstall script)"
+
+  - name: block-network-from-build
+    event: network
+    conditions:
+      all:
+        - remote_port: { any_of: [4444, 5555, 8888, 9001, 1337, 31337] }
+    action: deny
+    reason: "Supply chain: outbound connection to known C2 port during build"
+
+  - name: block-ci-credential-exfil
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/*/.aws/credentials" }
+        - uid: { not: 0 }
+    action: log
+    reason: "Supply chain: AWS credential file access (Codecov-style token theft)"
+
+  - name: block-docker-cred-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/*/.docker/config.json" }
+        - uid: { not: 0 }
+    action: log
+    reason: "Supply chain: Docker registry credential read (push token theft)"
+
+  - name: block-npmrc-read
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/*/.npmrc" }
+        - uid: { not: 0 }
+    action: log
+    reason: "Supply chain: .npmrc read (npm publish token theft for dependency confusion)"
+
+  - name: block-kube-config-exfil
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/home/*/.kube/config" }
+        - uid: { not: 0 }
+    action: log
+    reason: "Supply chain: kubeconfig read (cluster access token theft)"
+
+  - name: block-shared-lib-install
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/usr/lib/**/*.so*" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "Supply chain: shared library write (XZ-style backdoor injection into system libs)"
+
+  - name: block-ld-config-modification
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/etc/ld.so.preload", "/etc/ld.so.conf", "/etc/ld.so.conf.d/*"] }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "Supply chain: dynamic linker config (library preload backdoor like XZ CVE-2024-3094)"
+
+  - name: block-git-hook-injection
+    event: file
+    conditions:
+      all:
+        - path: { glob: "**/.git/hooks/*" }
+        - operation: "write"
+    action: log
+    reason: "Supply chain: git hook modification (persistent code execution on git operations)"
+
+  - name: block-env-var-dump
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/proc/self/environ" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "Supply chain: /proc/self/environ read (CI secrets from environment variables)"
+
+default_action: allow

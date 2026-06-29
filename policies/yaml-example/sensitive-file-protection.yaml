@@ -1,4 +1,4 @@
-name: sensitive-file-protection
+﻿name: sensitive-file-protection
 version: 1
 description: "Protect sensitive files from unauthorized access and modification"
 
@@ -47,7 +47,7 @@ rules:
     conditions:
       all:
         - path: { glob: "/etc/sudoers*" }
-    action: audit
+    action: log
     reason: "Access to sudoers configuration"
 
   - name: block-ssh-key-theft
@@ -65,7 +65,7 @@ rules:
     conditions:
       all:
         - path: { glob: "/root/.ssh/*" }
-    action: audit
+    action: log
     reason: "Access to root SSH keys"
 
   - name: block-cloud-cred-access
@@ -81,8 +81,8 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/var/run/secrets/kubernetes.io/serviceaccount/token" }
-    action: audit
+        - path: { eq: "/var/run/secrets/kubernetes.io/serviceaccount/token" }
+    action: log
     reason: "Kubernetes service account token read"
 
   - name: block-tls-key-access
@@ -100,7 +100,7 @@ rules:
       all:
         - path: { any_of: $history_files }
         - operation: "read"
-    action: audit
+    action: log
     reason: "Shell history file read (credential harvesting indicator)"
 
   - name: block-etc-passwd-write

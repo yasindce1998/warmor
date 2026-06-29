@@ -23,7 +23,7 @@ rules:
     event: process
     conditions:
       all:
-        - path: { equals: "/usr/local/bin/myservice" }
+        - path: { eq: "/usr/local/bin/myservice" }
     action: allow
     reason: "Primary application binary"
 
@@ -31,8 +31,8 @@ rules:
     event: process
     conditions:
       all:
-        - path: { equals: "/usr/bin/curl" }
-        - uid: { equals: 0 }
+        - path: { eq: "/usr/bin/curl" }
+        - uid: { eq: 0 }
     action: allow
     reason: "Health check via curl (root only)"
 
@@ -99,7 +99,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 53 }
+        - remote_port: { eq: 53 }
     action: allow
     reason: "DNS resolution"
 
@@ -107,7 +107,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 443 }
+        - remote_port: { eq: 443 }
     action: allow
     reason: "HTTPS to upstream APIs"
 
@@ -115,7 +115,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 5432 }
+        - remote_port: { eq: 5432 }
     action: allow
     reason: "PostgreSQL database connection"
 
@@ -123,7 +123,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 6379 }
+        - remote_port: { eq: 6379 }
     action: allow
     reason: "Redis cache connection"
 

@@ -1,4 +1,4 @@
-name: lateral-movement-detection
+﻿name: lateral-movement-detection
 version: 1
 description: "Detect and block lateral movement techniques across containers and hosts"
 
@@ -79,7 +79,7 @@ rules:
       all:
         - path: { glob: "/root/.ssh/**" }
         - operation: "read"
-    action: audit
+    action: log
     reason: "Root SSH key access (credential theft for lateral movement)"
 
   - name: detect-user-ssh-key-access
@@ -88,7 +88,7 @@ rules:
       all:
         - path: { glob: "/home/**/.ssh/id_*" }
         - operation: "read"
-    action: audit
+    action: log
     reason: "User SSH private key access (credential theft)"
 
   # Block access to Kubernetes service account tokens (pod-to-pod lateral)
@@ -98,7 +98,7 @@ rules:
       all:
         - path: { glob: "/var/run/secrets/kubernetes.io/serviceaccount/token" }
         - operation: "read"
-    action: audit
+    action: log
     reason: "Kubernetes service account token access (pod lateral movement)"
 
   # Detect /etc/shadow access (password hash theft)
@@ -106,7 +106,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/shadow" }
+        - path: { eq: "/etc/shadow" }
         - operation: "read"
         - uid: { not: 0 }
     action: deny

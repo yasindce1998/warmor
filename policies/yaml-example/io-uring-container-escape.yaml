@@ -1,0 +1,98 @@
+﻿name: io-uring-container-escape
+version: 1
+description: "Mitigate io_uring-based container escapes and privilege escalation (CVE-2024-0582, CVE-2023-2598, CVE-2023-21400)"
+
+variables:
+  io_uring_exploit_paths:
+    - "/tmp/*"
+    - "/dev/shm/*"
+    - "/var/tmp/*"
+  kernel_debug_paths:
+    - "/proc/kallsyms"
+    - "/proc/kcore"
+    - "/proc/modules"
+    - "/sys/kernel/debug/**"
+    - "/proc/sys/kernel/perf_event_paranoid"
+
+rules:
+  - name: block-io-uring-exploit-binary
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/tmp/*" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "io_uring escape: binary execution from /tmp staging directory"
+
+  - name: block-devshm-exploit-binary
+    event: process
+    conditions:
+      all:
+        - path: { glob: "/dev/shm/*" }
+    action: deny
+    reason: "io_uring escape: binary execution from /dev/shm (in-memory exploit)"
+
+  - name: block-debugfs-access
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/sys/kernel/debug/**" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "io_uring escape: debugfs access (kernel state inspection)"
+
+  - name: block-kernel-symbol-resolution
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/proc/kallsyms" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "io_uring escape: kallsyms read (gadget address resolution for ROP)"
+
+  - name: block-perf-paranoid-check
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/proc/sys/kernel/perf_event_paranoid" }
+        - uid: { not: 0 }
+    action: log
+    reason: "io_uring escape: perf_event_paranoid probe (capability check)"
+
+  - name: block-cred-struct-overwrite-indicators
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/proc/self/status" }
+        - uid: { not: 0 }
+    action: log
+    reason: "io_uring escape: process credential check (verifying UAF-based cred overwrite)"
+
+  - name: block-namespace-tools-post-exploit
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/usr/bin/nsenter", "/bin/nsenter", "/usr/bin/unshare"] }
+        - uid: { not: 0 }
+    action: deny
+    reason: "io_uring escape: namespace manipulation after privilege gain"
+
+  - name: block-kmod-loading
+    event: process
+    conditions:
+      all:
+        - path: { any_of: ["/sbin/modprobe", "/usr/sbin/modprobe", "/sbin/insmod", "/usr/sbin/insmod"] }
+        - uid: { not: 0 }
+    action: deny
+    reason: "io_uring escape: kernel module loading attempt (post-exploitation)"
+
+  - name: audit-large-mmap-request
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/proc/self/maps" }
+        - uid: { not: 0 }
+    action: log
+    reason: "io_uring escape: memory map inspection (heap spray planning)"
+
+default_action: allow

@@ -1,0 +1,176 @@
+name: linux-lpe-comprehensive
+version: 1
+description: "Comprehensive Linux Local Privilege Escalation prevention covering 2023-2025 techniques: namespace abuse, capability manipulation, credential access, and persistence"
+
+variables:
+  namespace_tools:
+    - "/usr/bin/unshare"
+    - "/usr/bin/nsenter"
+    - "/bin/nsenter"
+  capability_tools:
+    - "/usr/sbin/setcap"
+    - "/sbin/setcap"
+    - "/usr/bin/capsh"
+  credential_files:
+    - "/etc/shadow"
+    - "/etc/gshadow"
+    - "/etc/sudoers"
+    - "/etc/sudoers.d/*"
+    - "/etc/krb5.keytab"
+  persistence_paths:
+    - "/etc/cron.d/*"
+    - "/etc/cron.daily/*"
+    - "/etc/cron.hourly/*"
+    - "/var/spool/cron/crontabs/*"
+    - "/etc/systemd/system/*.service"
+    - "/etc/systemd/system/*.timer"
+    - "/usr/lib/systemd/system/*.service"
+    - "/etc/init.d/*"
+    - "/root/.bashrc"
+    - "/root/.bash_profile"
+    - "/root/.profile"
+  auth_bypass_targets:
+    - "/etc/pam.d/*"
+    - "/etc/security/access.conf"
+    - "/etc/security/limits.conf"
+    - "/etc/nsswitch.conf"
+
+rules:
+  - name: block-user-namespace-creation
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $namespace_tools }
+        - uid: { not: 0 }
+    action: log
+    reason: "LPE: namespace creation (prerequisite for many kernel exploits since 2023)"
+
+  - name: block-capability-set
+    event: process
+    conditions:
+      all:
+        - path: { any_of: $capability_tools }
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: capability manipulation (arbitrary capability grant)"
+
+  - name: block-shadow-read
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/etc/shadow" }
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: /etc/shadow read (credential harvesting for offline cracking)"
+
+  - name: block-shadow-write
+    event: file
+    conditions:
+      all:
+        - path: { eq: "/etc/shadow" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: /etc/shadow write (password replacement attack)"
+
+  - name: block-sudoers-modification
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/sudoers*" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: sudoers modification (privilege grant persistence)"
+
+  - name: block-pam-config-modification
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/pam.d/*" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: PAM config modification (authentication bypass)"
+
+  - name: block-systemd-service-creation
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/systemd/system/*.service" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: systemd service creation (persistence with elevated privileges)"
+
+  - name: block-timer-creation
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/systemd/system/*.timer" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: systemd timer creation (scheduled privilege escalation)"
+
+  - name: block-cron-persistence
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/etc/cron.*/**" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: cron job creation (persistence mechanism)"
+
+  - name: block-spool-cron-write
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/var/spool/cron/**" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: user crontab modification (scheduled escalation)"
+
+  - name: block-root-profile-modification
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/root/.bashrc", "/root/.bash_profile", "/root/.profile"] }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: root shell profile modification (command injection on next root login)"
+
+  - name: block-ssh-authorized-keys-inject
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/root/.ssh/authorized_keys" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: root SSH key injection (persistent backdoor access)"
+
+  - name: block-ld-preload-injection
+    event: file
+    conditions:
+      all:
+        - path: { any_of: ["/etc/ld.so.preload", "/etc/ld.so.conf", "/etc/ld.so.conf.d/*"] }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: dynamic linker configuration modification (library injection)"
+
+  - name: block-binary-path-hijack
+    event: file
+    conditions:
+      all:
+        - path: { glob: "/usr/local/sbin/*" }
+        - operation: "write"
+        - uid: { not: 0 }
+    action: deny
+    reason: "LPE: PATH-first binary planting in /usr/local/sbin"
+
+default_action: allow

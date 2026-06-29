@@ -1,4 +1,4 @@
-name: kubernetes-pod-hardening
+﻿name: kubernetes-pod-hardening
 version: 1
 description: "Harden Kubernetes pods against common attack patterns"
 
@@ -56,7 +56,7 @@ rules:
     conditions:
       all:
         - path: { any_of: $shell_binaries }
-    action: audit
+    action: log
     reason: "Shell spawned in pod"
 
   - name: block-reverse-shell-tools
@@ -71,7 +71,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/var/run/secrets/kubernetes.io/serviceaccount/token" }
+        - path: { eq: "/var/run/secrets/kubernetes.io/serviceaccount/token" }
         - uid: { not: 0 }
     action: deny
     reason: "Non-root access to Kubernetes service account token"
@@ -88,25 +88,25 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/hosts" }
+        - path: { eq: "/etc/hosts" }
         - operation: "write"
-    action: audit
+    action: log
     reason: "Modification of /etc/hosts (DNS poisoning in pod)"
 
   - name: audit-resolv-conf-modify
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/resolv.conf" }
+        - path: { eq: "/etc/resolv.conf" }
         - operation: "write"
-    action: audit
+    action: log
     reason: "DNS configuration change in pod"
 
   - name: block-metadata-service
     event: network
     conditions:
       all:
-        - remote_ip: { equals: "169.254.169.254" }
+        - remote_addr: { eq: "169.254.169.254" }
     action: deny
     reason: "Cloud metadata service access (SSRF/credential theft)"
 
@@ -114,8 +114,8 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 6443 }
-    action: audit
+        - remote_port: { eq: 6443 }
+    action: log
     reason: "Direct Kubernetes API server connection"
 
 default_action: allow

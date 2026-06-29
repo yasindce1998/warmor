@@ -1,4 +1,4 @@
-name: cloud-metadata-protection
+﻿name: cloud-metadata-protection
 version: 1
 description: "Block SSRF attacks targeting cloud metadata services and protect cloud credentials"
 
@@ -102,7 +102,7 @@ rules:
     conditions:
       all:
         - path: { any_of: $http_clients }
-    action: audit
+    action: log
     reason: "HTTP client execution (monitor for SSRF to metadata service)"
 
   # Block connections to link-local metadata address range
@@ -111,7 +111,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 80 }
+        - remote_port: { eq: 80 }
     action: log
     reason: "HTTP connection (audit for metadata service SSRF)"
 

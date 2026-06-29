@@ -111,7 +111,7 @@ rules:
     conditions:
       all:
         - path: { any_of: ["/usr/bin/pg_dump", "/usr/bin/mysqldump", "/usr/bin/mongodump"] }
-    action: audit
+    action: log
     reason: "Database export tool executed (data loss prevention)"
 
   # Block write to WAL/binlog locations by non-DB users

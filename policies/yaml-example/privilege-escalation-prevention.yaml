@@ -1,4 +1,4 @@
-name: privilege-escalation-prevention
+﻿name: privilege-escalation-prevention
 version: 1
 description: "Detect and block common privilege escalation techniques"
 
@@ -48,7 +48,7 @@ rules:
     conditions:
       all:
         - path: { any_of: ["/usr/bin/sudo", "/usr/bin/su", "/usr/bin/doas"] }
-    action: audit
+    action: log
     reason: "Privilege elevation command executed"
 
   - name: block-exploit-from-tmp
@@ -73,8 +73,8 @@ rules:
     conditions:
       all:
         - path: { glob: "/tmp/**" }
-        - operation: { equals: "chmod" }
-    action: audit
+        - operation: { eq: "chmod" }
+    action: log
     reason: "Chmod in /tmp (possible SUID bit setting)"
 
   - name: audit-crontab-modification
@@ -83,7 +83,7 @@ rules:
       all:
         - path: { glob: "/var/spool/cron/**" }
         - operation: { any_of: ["write", "unlink"] }
-    action: audit
+    action: log
     reason: "Crontab modification (persistence/escalation technique)"
 
   - name: audit-systemd-service-creation
@@ -92,7 +92,7 @@ rules:
       all:
         - path: { glob: "/etc/systemd/system/*.service" }
         - operation: "write"
-    action: audit
+    action: log
     reason: "Systemd service creation (persistence/escalation)"
 
   - name: block-ld-preload-write

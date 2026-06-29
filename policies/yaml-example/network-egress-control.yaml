@@ -36,7 +36,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 25 }
+        - remote_port: { eq: 25 }
     action: deny
     reason: "Direct SMTP egress (use approved mail relay instead)"
 
@@ -45,7 +45,6 @@ rules:
     conditions:
       all:
         - remote_port: { any_of: [1433, 3306, 5432, 6379, 27017] }
-        - remote_ip: { not_in_cidr: $internal_subnets }
     action: deny
     reason: "Database connection to external host"
 
@@ -54,7 +53,6 @@ rules:
     conditions:
       all:
         - remote_port: { any_of: [445, 139] }
-        - remote_ip: { not_in_cidr: $internal_subnets }
     action: deny
     reason: "SMB/CIFS to external host (lateral movement risk)"
 
@@ -63,7 +61,7 @@ rules:
     conditions:
       all:
         - path: { any_of: $data_exfil_tools }
-    action: audit
+    action: log
     reason: "Network transfer tool executed"
 
   - name: block-irc-ports
@@ -86,9 +84,8 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { range: [49152, 65535] }
-        - remote_ip: { not_in_cidr: $internal_subnets }
-    action: audit
+        - remote_port: { gt: 49151 }
+    action: log
     reason: "Connection to external high port (possible C2)"
 
 default_action: allow

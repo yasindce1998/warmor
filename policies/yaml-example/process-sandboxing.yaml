@@ -38,7 +38,7 @@ rules:
     event: process
     conditions:
       all:
-        - path: { starts_with_any: $high_risk_binaries }
+        - path: { glob: "/tmp/*" }
     action: deny
     reason: "Execution from temp directory (apply sandbox: strict)"
     # sandbox_profile: strict
@@ -48,7 +48,7 @@ rules:
     conditions:
       all:
         - path: { any_of: $debug_tools }
-        - uid: { not_equals: 0 }
+        - uid: { not: 0 }
     action: deny
     reason: "Debug/tracing tool by non-root (apply sandbox: limited)"
     # sandbox_profile: limited
@@ -57,7 +57,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { starts_with_any: $container_escape_paths }
+        - path: { glob: "/proc/sys/**" }
         - operation: { any_of: ["write", "append"] }
     action: deny
     reason: "Write to container escape vector (apply sandbox: strict)"
@@ -68,16 +68,16 @@ rules:
     conditions:
       all:
         - path: { any_of: $sensitive_mounts }
-        - operation: { equals: "read" }
-    action: audit
+        - operation: { eq: "read" }
+    action: log
     reason: "Read of sensitive credential file"
 
   - name: sandbox-unauthorized-mount
     event: process
     conditions:
       all:
-        - comm: { equals: "mount" }
-        - uid: { not_equals: 0 }
+        - comm: { eq: "mount" }
+        - uid: { not: 0 }
     action: deny
     reason: "Non-root mount attempt (apply sandbox: strict)"
     # sandbox_profile: strict

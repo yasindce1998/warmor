@@ -1,4 +1,4 @@
-name: runtime-integrity-monitoring
+﻿name: runtime-integrity-monitoring
 version: 1
 description: "File integrity monitoring for critical system files and configuration drift detection"
 
@@ -28,7 +28,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/passwd" }
+        - path: { eq: "/etc/passwd" }
         - operation: "write"
         - uid: { not: 0 }
     action: deny
@@ -38,7 +38,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/shadow" }
+        - path: { eq: "/etc/shadow" }
         - operation: { any_of: ["write", "read"] }
         - uid: { not: 0 }
     action: deny
@@ -48,7 +48,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/sudoers" }
+        - path: { eq: "/etc/sudoers" }
         - operation: "write"
     action: deny
     reason: "Modification of sudoers file"
@@ -79,7 +79,7 @@ rules:
       all:
         - path: { glob: "/etc/systemd/system/**" }
         - operation: "write"
-    action: audit
+    action: log
     reason: "Systemd unit file modification (persistence mechanism)"
 
   - name: protect-initd
@@ -114,7 +114,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/ssh/sshd_config" }
+        - path: { eq: "/etc/ssh/sshd_config" }
         - operation: "write"
     action: deny
     reason: "SSHD config modification (backdoor access)"
@@ -134,7 +134,7 @@ rules:
       all:
         - path: { glob: "/home/**/.ssh/authorized_keys" }
         - operation: "write"
-    action: audit
+    action: log
     reason: "User authorized_keys modification"
 
   # Block LD_PRELOAD persistence
@@ -142,7 +142,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/ld.so.preload" }
+        - path: { eq: "/etc/ld.so.preload" }
         - operation: "write"
     action: deny
     reason: "LD_PRELOAD file modification (library injection rootkit)"

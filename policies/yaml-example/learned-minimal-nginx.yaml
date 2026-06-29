@@ -18,7 +18,7 @@ rules:
     event: process
     conditions:
       all:
-        - path: { equals: "/usr/sbin/nginx" }
+        - path: { eq: "/usr/sbin/nginx" }
     action: allow
     reason: "Observed: nginx master process"
 
@@ -26,7 +26,7 @@ rules:
     event: process
     conditions:
       all:
-        - comm: { equals: "nginx" }
+        - comm: { eq: "nginx" }
     action: allow
     reason: "Observed: nginx worker processes"
 
@@ -62,7 +62,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/run/nginx.pid" }
+        - path: { eq: "/run/nginx.pid" }
         - operation: { any_of: ["write", "read"] }
     action: allow
     reason: "Observed: PID file management"
@@ -89,7 +89,7 @@ rules:
     event: file
     conditions:
       all:
-        - path: { equals: "/etc/resolv.conf" }
+        - path: { eq: "/etc/resolv.conf" }
         - operation: "read"
     action: allow
     reason: "Observed: DNS resolver config"
@@ -107,7 +107,7 @@ rules:
     event: network
     conditions:
       all:
-        - remote_port: { equals: 53 }
+        - remote_port: { eq: 53 }
     action: allow
     reason: "Observed: DNS resolution"
 
