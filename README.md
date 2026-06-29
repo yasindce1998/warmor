@@ -72,7 +72,7 @@ That's it. Your system is now enforcing security policy at the kernel level.
 | Platform | Technology | Mode |
 |----------|-----------|------|
 | **Linux** | eBPF + LSM-BPF (7 hooks) | Production — kernel-level blocking |
-| **Windows** | ETW + eBPF-for-Windows | Beta — monitoring + blocking |
+| **Windows** | eBPF + ETW (hybrid mode) | Beta — kernel network enforcement + reliable telemetry |
 | **macOS** | Endpoint Security Framework | Beta — AUTH event blocking |
 
 ### Performance

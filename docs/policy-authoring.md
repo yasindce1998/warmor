@@ -169,3 +169,54 @@ Or with the daemon directly:
 ```bash
 ./warmor-daemon --validate-policy path/to/policy.yaml
 ```
+
+---
+
+## Example Policies
+
+The `policies/yaml-example/` directory contains categorized example policies organized by threat domain:
+
+```
+policies/yaml-example/
+├── policy.yaml              # Generic template
+├── cve/                     # CVE-specific exploit mitigations (22 policies)
+│   ├── cve-2021-4034.yaml   # PwnKit (pkexec privilege escalation)
+│   ├── cve-2021-44228.yaml  # Log4Shell
+│   ├── cve-2024-3094.yaml   # XZ backdoor
+│   └── ...
+├── windows/                 # Windows threat prevention (4 policies)
+│   ├── windows-credential-theft-prevention.yaml
+│   ├── windows-lolbin-detection.yaml
+│   ├── windows-lateral-movement.yaml
+│   └── windows-ransomware-prevention.yaml
+├── linux/                   # Linux-specific (3 policies)
+│   ├── linux-lpe-prevention.yaml
+│   ├── linux-ebpf-exploitation.yaml
+│   └── ...
+├── network/                 # Network egress/filtering (2 policies)
+│   ├── egress-control.yaml
+│   └── advanced-network-filtering.yaml
+├── workload/                # Workload-specific (7 policies)
+│   ├── kubernetes-hardening.yaml
+│   ├── ci-cd-pipeline.yaml
+│   ├── database-protection.yaml
+│   └── ...
+└── threat-detection/        # General threat detection (14 policies)
+    ├── crypto-miner-detection.yaml
+    ├── reverse-shell-detection.yaml
+    ├── supply-chain-attack.yaml
+    └── ...
+```
+
+### Windows-Specific Policies
+
+The `windows/` category contains policies targeting Windows-specific attack vectors:
+
+| Policy | Threats Covered |
+|--------|----------------|
+| `windows-credential-theft-prevention.yaml` | LSASS dumping, SAM hive access, DPAPI abuse, Mimikatz patterns |
+| `windows-lolbin-detection.yaml` | Living-off-the-land binaries (certutil, mshta, regsvr32, rundll32) |
+| `windows-lateral-movement.yaml` | PsExec, WMI remote execution, WinRM abuse, RDP tunneling |
+| `windows-ransomware-prevention.yaml` | VSS deletion, backup destruction, mass file encryption patterns |
+
+These policies use the same YAML format as Linux policies but target Windows-specific paths, processes, and behaviors. They work with both ETW and hybrid modes.

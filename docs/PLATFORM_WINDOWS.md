@@ -1,7 +1,7 @@
 # Windows Platform Guide
 
 **Status:** 🚧 EXPERIMENTAL/BETA  
-**Implementation:** eBPF-for-Windows (primary) + ETW (fallback)  
+**Implementation:** eBPF-for-Windows + ETW (hybrid mode)  
 **Version:** 2.0-beta  
 **Last Updated:** June 26, 2026
 
@@ -11,6 +11,8 @@
 
 **Windows support is currently in EXPERIMENTAL/BETA status:**
 - ✅ eBPF-for-Windows integration with full program loading and ring buffer events
+- ✅ Hybrid mode: eBPF (network/enforcement) + ETW (process/file telemetry) simultaneously
+- ✅ Policy map enforcement: BPF hash map for kernel-level deny decisions
 - ✅ ETW-based monitoring as automatic fallback
 - ✅ Process, file, and network event collection with real binary parsing
 - ✅ Enforcement capabilities (process termination via Win32 API)
@@ -28,24 +30,59 @@
 
 ## Architecture
 
+### Hybrid Mode (Default when eBPF-for-Windows is available)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              WASM Policy Engine                          │
+│         (Portable, Platform-Agnostic)                   │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│         Platform Abstraction Layer (interface.go)        │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│          Windows Platform (windows.go)                   │
+│          Mode: hybrid | ebpf | etw                      │
+└────────────────┬────────────────────────┬───────────────┘
+                 │                        │
+    ┌────────────▼──────────┐  ┌──────────▼────────────┐
+    │   eBPF-for-Windows    │  │    ETW Consumer        │
+    │   (Network SOCK_OPS)  │  │  (Process + File)      │
+    │                       │  │                        │
+    │  ┌─────────────────┐  │  │  - Process creation    │
+    │  │  policy_map      │  │  │  - File operations     │
+    │  │  (BPF hash map)  │  │  │  - Path correlation    │
+    │  │  PID→deny/allow  │  │  │                        │
+    │  └─────────────────┘  │  └────────────────────────┘
+    └───────────────────────┘
+                 │
+                 ▼
+    ┌───────────────────────┐
+    │    Windows Kernel      │
+    │  - SOCK_OPS hooks      │
+    │  - Network enforcement │
+    │  - <1μs map lookups    │
+    └───────────────────────┘
+```
+
+### Mode Selection Logic
+
+| Condition | Mode | Behavior |
+|-----------|------|----------|
+| eBPF available + ETW available | `hybrid` | eBPF for network (kernel enforcement) + ETW for process/file |
+| eBPF available + ETW fails | `ebpf` | eBPF handles all monitoring |
+| eBPF unavailable | `etw` | ETW handles all monitoring (no kernel enforcement) |
+
+### ETW-Only Fallback Architecture
+
 ```
 ┌─────────────────────────────────────┐
-│         WASM Policy Engine          │
-│    (Portable, Platform-Agnostic)    │
-└─────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────┐
-│    Platform Abstraction Layer       │
-│         (interface.go)              │
-└─────────────────────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────┐
 │    Windows Platform (windows.go)    │
-│    - eBPF-for-Windows (primary)     │
-│    - ETW integration (fallback)     │
-│    - Automatic fallback             │
+│    Mode: etw                        │
 └─────────────────────────────────────┘
                  │
                  ▼
@@ -69,6 +106,8 @@
 
 ### ✅ Implemented Features
 - **eBPF-for-Windows Integration** - Full program loading, ring buffer event delivery, enforcement
+- **Hybrid Mode** - eBPF for network (SOCK_OPS kernel enforcement) + ETW for process/file (reliable telemetry)
+- **Policy Map Push** - BPF hash map (`policy_map`) for kernel-level deny decisions via `bpf_map_update_elem`
 - **Multi-Step Detection** - Service check → driver probe → DLL version query → API verification
 - **ETW Consumer Framework** - Complete ETW session management (automatic fallback)
 - **Process Monitoring** - Process creation/termination with binary event parsing (PID, PPID, SID, image name, command line)
@@ -306,25 +345,79 @@ When running as a service, the daemon:
 
 ## Platform Capabilities
 
-**eBPF Mode:**
+**Hybrid Mode (default when eBPF available):**
+```go
+Capabilities{
+    ProcessMonitoring: true,   // ✅ ETW process events (reliable Windows telemetry)
+    FileMonitoring:    true,   // ✅ ETW file events (with path correlation)
+    NetworkMonitoring: true,   // ✅ eBPF SOCK_OPS (kernel-level enforcement)
+    Enforcement:       true,   // ✅ Kernel blocking for network + process termination
+    LSMEnforcement:    true,   // ✅ Policy map available for kernel decisions
+}
+```
+
+**eBPF-Only Mode:**
 ```go
 Capabilities{
     ProcessMonitoring: true,   // ✅ eBPF process hooks
     FileMonitoring:    true,   // ✅ eBPF file hooks
     NetworkMonitoring: true,   // ✅ eBPF network hooks
     Enforcement:       true,   // ✅ Can block via program return codes
+    LSMEnforcement:    true,   // ✅ Policy map available
 }
 ```
 
-**ETW Mode (fallback):**
+**ETW-Only Mode (fallback):**
 ```go
 Capabilities{
     ProcessMonitoring: true,   // ✅ ETW process events
     FileMonitoring:    true,   // ✅ ETW file events (with path correlation)
     NetworkMonitoring: true,   // ✅ ETW network events (local + remote addr)
     Enforcement:       true,   // ✅ Process termination (post-facto, not in-path)
+    LSMEnforcement:    false,  // ❌ No kernel policy map without eBPF
 }
 ```
+
+## Policy Map Enforcement
+
+When eBPF-for-Windows is available (hybrid or eBPF mode), warmor exposes a **BPF hash map** (`policy_map`) for kernel-level enforcement. This enables the same two-tier caching used on Linux:
+
+1. WASM evaluates an event and decides **deny**
+2. The deny decision is pushed to the `policy_map` via `bpf_map_update_elem`
+3. Subsequent matching events are blocked in-kernel without userspace round-trip
+
+### Policy Map Structure
+
+```
+policy_map (BPF_MAP_TYPE_HASH)
+├── Key:   uint32 (PID)
+├── Value: uint8  (0=allow, 1=deny)
+└── Max:   4096 entries
+```
+
+### How It Integrates
+
+The `PolicyMap()` method on `WindowsPlatform` returns the `EBPFPolicyMap` syncer when available. The existing enforcer's `syncToPolicyMap` flow (same code path as Linux LSM enforcement) pushes deny decisions automatically:
+
+```go
+// internal/platform/windows.go
+func (p *WindowsPlatform) PolicyMap() any {
+    if p.ebpfLoader != nil && p.ebpfLoader.PolicyMapAvailable() {
+        return p.ebpfLoader.GetPolicyMap()
+    }
+    return nil
+}
+```
+
+The `LSMEnforcement` capability flag gates this — when `true`, the enforcer knows it can push rules to the kernel map.
+
+### Network Enforcement via SOCK_OPS
+
+In hybrid mode, eBPF handles network monitoring via `SOCK_OPS` hooks. The BPF program checks `policy_map` on every connect/accept:
+
+- If PID is in the map with value `1` (deny) → connection is blocked at kernel level
+- If PID is not in the map or value is `0` → connection proceeds normally
+- Latency: <1μs for map lookup (no userspace round-trip)
 
 ## Limitations
 
@@ -907,6 +1000,10 @@ logman query "WarmorETWSession" -ets
 - [x] File path correlation via FileObject tracking
 - [x] LocalAddr included in network events
 - [x] eBPF ring buffer programs with correct struct layouts
+- [x] Hybrid mode (eBPF network + ETW process/file)
+- [x] Policy map enforcement (`bpf_map_update_elem` / `bpf_map_delete_elem`)
+- [x] LSMEnforcement capability flag for Windows eBPF
+- [x] BPF C source programs (process_monitor.c, file_monitor.c, network_monitor.c)
 - [x] Windows CI (GitHub Actions, windows-latest)
 - [ ] AppContainer network/filesystem isolation
 
