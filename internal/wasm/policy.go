@@ -2,6 +2,7 @@ package wasm
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
@@ -9,35 +10,98 @@ import (
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
-// Policy represents a loaded WASM policy
+const eventStructSize = 256
+
+// Binary event struct layout (256 bytes, little-endian):
+//
+//	Offset  Size   Field
+//	0       4      pid (u32)
+//	4       4      uid (u32)
+//	8       4      gid (u32)
+//	12      1      event_type (0=process, 1=file, 2=network)
+//	13      64     comm (null-padded UTF-8)
+//	77      128    primary_str (filename/path/remote_addr, null-padded)
+//	205     4      flags (u32)
+//	209     2      remote_port (u16)
+//	211     2      local_port (u16)
+//	213     32     secondary_str (operation/protocol, null-padded)
+//	245     11     padding
+
+// Policy represents a loaded WASM policy instance.
 type Policy struct {
 	runtime  *Runtime
 	instance wazeroapi.Module
+
+	// Pre-allocated WASM memory region for binary event struct.
+	eventBufPtr uint32
+	// Which ABI does this module support?
+	useBinaryABI bool
 }
 
-// NewPolicy creates a new policy instance
+// NewPolicy creates a new policy instance from a compiled module.
 func NewPolicy(ctx context.Context, runtime *Runtime) (*Policy, error) {
-	// Instantiate the module
 	instance, err := runtime.runtime.InstantiateModule(ctx, runtime.module, runtime.config)
 	if err != nil {
 		return nil, fmt.Errorf("instantiate module: %w", err)
 	}
 
-	return &Policy{
+	p := &Policy{
 		runtime:  runtime,
 		instance: instance,
-	}, nil
+	}
+
+	// Detect ABI: prefer evaluate_event (binary) over evaluate_syscall (JSON)
+	if instance.ExportedFunction("evaluate_event") != nil {
+		p.useBinaryABI = true
+		malloc := instance.ExportedFunction("malloc")
+		if malloc == nil {
+			instance.Close(ctx)
+			return nil, fmt.Errorf("binary ABI module missing malloc export")
+		}
+		results, err := malloc.Call(ctx, uint64(eventStructSize))
+		if err != nil {
+			instance.Close(ctx)
+			return nil, fmt.Errorf("malloc for event buffer: %w", err)
+		}
+		p.eventBufPtr = uint32(results[0])
+	}
+
+	return p, nil
 }
 
-// Evaluate evaluates an event against the policy
+// Evaluate evaluates an event against the policy.
 func (p *Policy) Evaluate(ctx context.Context, event *api.Event) (api.Action, error) {
-	// Serialize event to the flat JSON format the Rust WASM module expects
+	ctx = contextWithEvent(ctx, event)
+
+	if p.useBinaryABI {
+		return p.evaluateBinary(ctx, event)
+	}
+	return p.evaluateJSON(ctx, event)
+}
+
+func (p *Policy) evaluateBinary(ctx context.Context, event *api.Event) (api.Action, error) {
+	buf := make([]byte, eventStructSize)
+	writeEventBinary(buf, event)
+
+	if !p.instance.Memory().Write(p.eventBufPtr, buf) {
+		return api.ActionDeny, fmt.Errorf("failed to write event to WASM memory")
+	}
+
+	evaluateFn := p.instance.ExportedFunction("evaluate_event")
+	results, err := evaluateFn.Call(ctx, uint64(p.eventBufPtr))
+	if err != nil {
+		return api.ActionDeny, fmt.Errorf("evaluate_event failed: %w", err)
+	}
+
+	return api.Action(results[0]), nil
+}
+
+func (p *Policy) evaluateJSON(ctx context.Context, event *api.Event) (api.Action, error) {
 	eventJSON, err := marshalEventForWASM(event)
 	if err != nil {
 		return api.ActionDeny, fmt.Errorf("marshal event: %w", err)
 	}
 
-	// Allocate memory in WASM for the event
 	malloc := p.instance.ExportedFunction("malloc")
 	if malloc == nil {
 		return api.ActionDeny, fmt.Errorf("malloc function not found")
@@ -49,19 +113,16 @@ func (p *Policy) Evaluate(ctx context.Context, event *api.Event) (api.Action, er
 	}
 	ptr := uint32(results[0])
 
-	// Ensure memory is freed even on error
 	defer func() {
 		if freeFn := p.instance.ExportedFunction("free"); freeFn != nil {
 			_, _ = freeFn.Call(ctx, uint64(ptr), uint64(len(eventJSON)))
 		}
 	}()
 
-	// Write event data to WASM memory
 	if !p.instance.Memory().Write(ptr, eventJSON) {
 		return api.ActionDeny, fmt.Errorf("failed to write event to WASM memory")
 	}
 
-	// Call evaluate_syscall function
 	evaluateFn := p.instance.ExportedFunction("evaluate_syscall")
 	if evaluateFn == nil {
 		return api.ActionDeny, fmt.Errorf("evaluate_syscall function not found")
@@ -72,13 +133,103 @@ func (p *Policy) Evaluate(ctx context.Context, event *api.Event) (api.Action, er
 		return api.ActionDeny, fmt.Errorf("evaluate_syscall failed: %w", err)
 	}
 
-	action := api.Action(results[0])
-	return action, nil
+	return api.Action(results[0]), nil
 }
 
-// marshalEventForWASM produces the flat JSON structure the Rust serde enum expects.
-// The Rust code uses #[serde(tag = "type")] with variants PROCESS/FILE/NETWORK,
-// where all fields must be at the top level (no nested sub-objects).
+// GetMatchedRule reads the last matched rule reason from the WASM module.
+func (p *Policy) GetMatchedRule(ctx context.Context) string {
+	fn := p.instance.ExportedFunction("get_last_matched_rule")
+	if fn == nil {
+		return ""
+	}
+
+	const reasonBufSize = 512
+	malloc := p.instance.ExportedFunction("malloc")
+	if malloc == nil {
+		return ""
+	}
+
+	results, err := malloc.Call(ctx, reasonBufSize)
+	if err != nil {
+		return ""
+	}
+	bufPtr := uint32(results[0])
+
+	defer func() {
+		if freeFn := p.instance.ExportedFunction("free"); freeFn != nil {
+			_, _ = freeFn.Call(ctx, uint64(bufPtr), reasonBufSize)
+		}
+	}()
+
+	results, err = fn.Call(ctx, uint64(bufPtr), reasonBufSize)
+	if err != nil {
+		return ""
+	}
+	written := uint32(results[0])
+	if written == 0 {
+		return ""
+	}
+
+	data, ok := p.instance.Memory().Read(bufPtr, written)
+	if !ok {
+		return ""
+	}
+	return string(data)
+}
+
+func writeEventBinary(buf []byte, event *api.Event) {
+	for i := range buf {
+		buf[i] = 0
+	}
+
+	binary.LittleEndian.PutUint32(buf[0:4], event.PID)
+	binary.LittleEndian.PutUint32(buf[4:8], event.UID)
+	binary.LittleEndian.PutUint32(buf[8:12], event.GID)
+
+	buf[12] = byte(event.GetType())
+
+	copyStringToBuffer(buf[13:77], event.Comm)
+
+	switch event.GetType() {
+	case api.EventTypeProcess:
+		filename := event.Filename
+		if event.Process != nil {
+			filename = event.Process.Filename
+		}
+		copyStringToBuffer(buf[77:205], filename)
+
+	case api.EventTypeFile:
+		if event.File != nil {
+			copyStringToBuffer(buf[77:205], event.File.Path)
+			binary.LittleEndian.PutUint32(buf[205:209], event.File.Flags)
+			copyStringToBuffer(buf[213:245], event.File.Operation)
+		} else {
+			copyStringToBuffer(buf[77:205], event.Filename)
+			copyStringToBuffer(buf[213:245], "open")
+		}
+
+	case api.EventTypeNetwork:
+		if event.Network != nil {
+			copyStringToBuffer(buf[77:205], event.Network.RemoteAddr)
+			binary.LittleEndian.PutUint16(buf[209:211], event.Network.RemotePort)
+			binary.LittleEndian.PutUint16(buf[211:213], event.Network.LocalPort)
+			copyStringToBuffer(buf[213:245], event.Network.Protocol)
+		}
+	}
+}
+
+func copyStringToBuffer(dst []byte, s string) {
+	if len(s) == 0 {
+		return
+	}
+	n := len(s)
+	if n > len(dst) {
+		n = len(dst)
+	}
+	copy(dst[:n], s[:n])
+}
+
+// marshalEventForWASM produces the flat JSON structure for legacy WASM modules.
 func marshalEventForWASM(event *api.Event) ([]byte, error) {
 	m := map[string]any{
 		"pid":  event.PID,
@@ -128,7 +279,7 @@ func marshalEventForWASM(event *api.Event) ([]byte, error) {
 	return json.Marshal(m)
 }
 
-// Close cleans up the policy instance
+// Close cleans up the policy instance.
 func (p *Policy) Close(ctx context.Context) error {
 	if p.instance != nil {
 		return p.instance.Close(ctx)

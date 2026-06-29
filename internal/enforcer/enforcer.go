@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -54,6 +55,7 @@ type Enforcer struct {
 	wasmRuntime   *wasm.Runtime
 	evaluatorMu   sync.RWMutex
 	evaluator     *wasm.PolicyEvaluator
+	pool          *wasm.Pool
 	cache         *cache.DecisionCache
 	actionHandler *ActionHandler
 	logger        *logging.Logger
@@ -114,14 +116,17 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		}
 	}
 
-	// Create WASM runtime
+	// Create WASM runtime with compilation cache
 	logger.LogInfo("Creating WASM runtime...")
-	wasmRuntime, err := wasm.NewRuntime(ctx)
+	wasmRuntime, err := wasm.NewRuntime(ctx, wasm.RuntimeConfig{
+		CacheDir: wasm.DefaultCacheDir(),
+		PoolSize: runtime.NumCPU(),
+	})
 	if err != nil {
 		plat.Close()
 		return nil, fmt.Errorf("create WASM runtime: %w", err)
 	}
-	logger.LogInfo("✓ WASM runtime created")
+	logger.LogInfo("✓ WASM runtime created (compilation cache enabled)")
 
 	// Load policy (supports both .wasm and .yaml/.yml)
 	logger.LogInfo(fmt.Sprintf("Loading policy from: %s", policyPath))
@@ -141,18 +146,19 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 	}
 	logger.LogInfo("✓ Policy loaded")
 
-	// Create policy instance
-	logger.LogInfo("Creating policy instance...")
-	policy, err := wasm.NewPolicy(ctx, wasmRuntime)
+	// Create instance pool for parallel evaluation
+	poolSize := runtime.NumCPU()
+	logger.LogInfo(fmt.Sprintf("Creating policy instance pool (size=%d)...", poolSize))
+	pool, err := wasm.NewPool(ctx, wasmRuntime, poolSize)
 	if err != nil {
 		wasmRuntime.Close(ctx)
 		plat.Close()
-		return nil, fmt.Errorf("create policy: %w", err)
+		return nil, fmt.Errorf("create policy pool: %w", err)
 	}
-	logger.LogInfo("✓ Policy instance created")
+	logger.LogInfo(fmt.Sprintf("✓ Policy pool created (%d instances)", poolSize))
 
-	// Create policy evaluator with context
-	evaluator := wasm.NewPolicyEvaluator(policy, hostname)
+	// Create pool-backed policy evaluator
+	evaluator := wasm.NewPolicyEvaluator(pool, hostname)
 
 	// Initialize decision cache (10k entries, 5min TTL)
 	decisionCache := cache.NewDecisionCache(10000, 5*time.Minute)
@@ -209,6 +215,7 @@ func New(ctx context.Context, policyPath string, opts *Options) (*Enforcer, erro
 		platform:       plat,
 		wasmRuntime:    wasmRuntime,
 		evaluator:      evaluator,
+		pool:           pool,
 		cache:          decisionCache,
 		actionHandler:  actionHandler,
 		logger:         logger,
@@ -512,8 +519,11 @@ func (e *Enforcer) PrintStats() {
 func (e *Enforcer) ReloadPolicy() error {
 	e.logger.LogInfo(fmt.Sprintf("Reloading policy from: %s", e.policyPath))
 
-	// Create new runtime
-	newRuntime, err := wasm.NewRuntime(e.ctx)
+	// Create new runtime with compilation cache
+	newRuntime, err := wasm.NewRuntime(e.ctx, wasm.RuntimeConfig{
+		CacheDir: wasm.DefaultCacheDir(),
+		PoolSize: runtime.NumCPU(),
+	})
 	if err != nil {
 		return fmt.Errorf("create new runtime: %w", err)
 	}
@@ -531,22 +541,25 @@ func (e *Enforcer) ReloadPolicy() error {
 		}
 	}
 
-	// Create new policy instance
-	newPolicy, err := wasm.NewPolicy(e.ctx, newRuntime)
+	// Create new pool
+	poolSize := runtime.NumCPU()
+	newPool, err := wasm.NewPool(e.ctx, newRuntime, poolSize)
 	if err != nil {
 		newRuntime.Close(e.ctx)
-		return fmt.Errorf("create new policy: %w", err)
+		return fmt.Errorf("create new policy pool: %w", err)
 	}
 
 	// Create new evaluator
 	hostname, _ := os.Hostname()
-	newEvaluator := wasm.NewPolicyEvaluator(newPolicy, hostname)
+	newEvaluator := wasm.NewPolicyEvaluator(newPool, hostname)
 
 	// Atomic swap with mutex protection
 	e.evaluatorMu.Lock()
 	oldEvaluator := e.evaluator
+	oldPool := e.pool
 	oldRuntime := e.wasmRuntime
 	e.evaluator = newEvaluator
+	e.pool = newPool
 	e.wasmRuntime = newRuntime
 	e.evaluatorMu.Unlock()
 
@@ -556,6 +569,9 @@ func (e *Enforcer) ReloadPolicy() error {
 	// Clean up old resources
 	if oldEvaluator != nil {
 		oldEvaluator.Close(e.ctx)
+	}
+	if oldPool != nil {
+		oldPool.Close(e.ctx)
 	}
 	if oldRuntime != nil {
 		oldRuntime.Close(e.ctx)
@@ -616,14 +632,18 @@ func (e *Enforcer) Close() error {
 	// Clean up enforcer resources
 	e.evaluatorMu.Lock()
 	evaluator := e.evaluator
-	runtime := e.wasmRuntime
+	pool := e.pool
+	rt := e.wasmRuntime
 	e.evaluatorMu.Unlock()
 
 	if evaluator != nil {
 		evaluator.Close(e.ctx)
 	}
-	if runtime != nil {
-		runtime.Close(e.ctx)
+	if pool != nil {
+		pool.Close(e.ctx)
+	}
+	if rt != nil {
+		rt.Close(e.ctx)
 	}
 	if e.platform != nil {
 		e.platform.Close()

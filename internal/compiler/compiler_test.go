@@ -165,7 +165,7 @@ func TestGenerateRust(t *testing.T) {
 	}
 
 	checks := []string{
-		"evaluate_syscall",
+		"evaluate_event",
 		"evaluate_process",
 		"evaluate_file",
 		"evaluate_network",
@@ -175,8 +175,13 @@ func TestGenerateRust(t *testing.T) {
 		"malloc",
 		"free",
 		"matches_glob",
-		"serde::Deserialize",
-		"serde_json::from_slice",
+		"#![no_std]",
+		"read_u32",
+		"read_u16",
+		"read_str",
+		"BumpAllocator",
+		"RULE_REASONS",
+		"get_last_matched_rule",
 		"/tmp/**",
 		"/usr/bin/nc",
 		"/usr/bin/ncat",
@@ -198,11 +203,8 @@ func TestGenerateCargoToml(t *testing.T) {
 	if !strings.Contains(toml, "cdylib") {
 		t.Error("Cargo.toml missing cdylib crate-type")
 	}
-	if !strings.Contains(toml, "serde") {
-		t.Error("Cargo.toml missing serde dependency")
-	}
-	if !strings.Contains(toml, "serde_json") {
-		t.Error("Cargo.toml missing serde_json dependency")
+	if strings.Contains(toml, "serde") {
+		t.Error("Cargo.toml should not contain serde (binary ABI has no dependencies)")
 	}
 	// wasm32-unknown-unknown target is set via cargo build flags, not in Cargo.toml
 }
@@ -255,12 +257,12 @@ default_action: allow
 	}
 
 	checks := []string{
-		"event.remote_port > 1024",
-		"event.remote_port < 65535",
-		".starts_with(\"/home\")",
-		".contains(\".ssh\")",
-		"!(event.comm == \"systemd\")",
-		"event.comm == \"bash\" || event.comm == \"sh\"",
+		"remote_port > 1024",
+		"remote_port < 65535",
+		"str_starts_with(path, \"/home\")",
+		"str_contains(path, \".ssh\")",
+		"!(comm == \"systemd\")",
+		"comm == \"bash\" || comm == \"sh\"",
 	}
 
 	for _, check := range checks {

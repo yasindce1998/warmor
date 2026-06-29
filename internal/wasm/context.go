@@ -8,29 +8,34 @@ import (
 	"github.com/yasindce1998/warmor/pkg/api"
 )
 
-// PolicyEvaluator handles policy evaluation with context
+// PolicyEvaluator handles policy evaluation with an instance pool.
 type PolicyEvaluator struct {
-	policy   *Policy
+	pool     *Pool
 	hostname string
 }
 
-// NewPolicyEvaluator creates a new policy evaluator
-func NewPolicyEvaluator(policy *Policy, hostname string) *PolicyEvaluator {
+// NewPolicyEvaluator creates a new pool-backed policy evaluator.
+func NewPolicyEvaluator(pool *Pool, hostname string) *PolicyEvaluator {
 	return &PolicyEvaluator{
-		policy:   policy,
+		pool:     pool,
 		hostname: hostname,
 	}
 }
 
-// ActionAuditDeny is the WASM ABI value for per-rule audit mode denials
+// ActionAuditDeny is the WASM ABI value for per-rule audit mode denials.
 const ActionAuditDeny api.Action = 3
 
-// Evaluate runs policy evaluation with full context
+// Evaluate runs policy evaluation using an instance from the pool.
 func (e *PolicyEvaluator) Evaluate(ctx context.Context, event *api.Event) (*api.ActionResult, error) {
 	start := time.Now()
 
-	// Call policy
-	action, err := e.policy.Evaluate(ctx, event)
+	policy, err := e.pool.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get policy from pool: %w", err)
+	}
+	defer e.pool.Put(policy)
+
+	action, err := policy.Evaluate(ctx, event)
 	if err != nil {
 		return nil, err
 	}
@@ -42,10 +47,15 @@ func (e *PolicyEvaluator) Evaluate(ctx context.Context, event *api.Event) (*api.
 		audit = true
 	}
 
-	// Build result
+	// Extract matched rule reason from WASM if available
+	reason := policy.GetMatchedRule(ctx)
+	if reason == "" {
+		reason = e.buildReason(action, event)
+	}
+
 	result := &api.ActionResult{
 		Action:    action,
-		Reason:    e.buildReason(action, event),
+		Reason:    reason,
 		Timestamp: start,
 		Cached:    false,
 		Latency:   time.Since(start),
@@ -68,7 +78,7 @@ func (e *PolicyEvaluator) buildReason(action api.Action, event *api.Event) strin
 	}
 }
 
-// Close closes the underlying policy
+// Close closes the underlying pool.
 func (e *PolicyEvaluator) Close(ctx context.Context) error {
-	return e.policy.Close(ctx)
+	return e.pool.Close(ctx)
 }

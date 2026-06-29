@@ -93,15 +93,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	pol, err := wasm.NewPolicy(ctx, rt)
+	pool, err := wasm.NewPool(ctx, rt, 1)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error creating policy instance: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error creating policy pool: %v\n", err)
 		os.Exit(1)
 	}
-	defer pol.Close(ctx)
+	defer pool.Close(ctx)
 
 	hostname, _ := os.Hostname()
-	evaluator := wasm.NewPolicyEvaluator(pol, hostname)
+	evaluator := wasm.NewPolicyEvaluator(pool, hostname)
 
 	fmt.Fprintf(os.Stderr, "Replaying %d events...\n", len(events))
 	result, err := simulator.Replay(ctx, events, evaluator)

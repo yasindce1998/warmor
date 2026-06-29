@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/tetratelabs/wazero"
@@ -12,27 +13,86 @@ import (
 	"github.com/yasindce1998/warmor/internal/compiler"
 )
 
-// Runtime wraps the WASM runtime
-type Runtime struct {
-	runtime wazero.Runtime
-	module  wazero.CompiledModule
-	config  wazero.ModuleConfig
+// RuntimeConfig configures the WASM runtime.
+type RuntimeConfig struct {
+	// CacheDir enables the Wazero compilation cache. When non-empty, compiled
+	// native code is persisted to this directory and reused across restarts.
+	CacheDir string
+
+	// PoolSize sets the number of WASM instances in the evaluation pool.
+	// Defaults to runtime.NumCPU() if zero.
+	PoolSize int
 }
 
-// NewRuntime creates a new WASM runtime
-func NewRuntime(ctx context.Context) (*Runtime, error) {
-	// Create runtime with default configuration
-	r := wazero.NewRuntime(ctx)
+// DefaultCacheDir returns the platform-appropriate default cache directory.
+func DefaultCacheDir() string {
+	if dir, err := os.UserCacheDir(); err == nil {
+		return filepath.Join(dir, "warmor", "wasm-cache")
+	}
+	return ""
+}
+
+// Runtime wraps the WASM runtime
+type Runtime struct {
+	runtime  wazero.Runtime
+	module   wazero.CompiledModule
+	config   wazero.ModuleConfig
+	cache    wazero.CompilationCache
+	poolSize int
+}
+
+// NewRuntime creates a new WASM runtime with compilation cache support.
+func NewRuntime(ctx context.Context, cfgs ...RuntimeConfig) (*Runtime, error) {
+	var cfg RuntimeConfig
+	if len(cfgs) > 0 {
+		cfg = cfgs[0]
+	}
+
+	poolSize := cfg.PoolSize
+	if poolSize <= 0 {
+		poolSize = runtime.NumCPU()
+	}
+
+	runtimeCfg := wazero.NewRuntimeConfig()
+
+	var compilationCache wazero.CompilationCache
+	if cfg.CacheDir != "" {
+		if err := os.MkdirAll(cfg.CacheDir, 0o750); err != nil {
+			return nil, fmt.Errorf("create cache dir: %w", err)
+		}
+		cache, err := wazero.NewCompilationCacheWithDir(cfg.CacheDir)
+		if err != nil {
+			return nil, fmt.Errorf("create compilation cache: %w", err)
+		}
+		compilationCache = cache
+		runtimeCfg = runtimeCfg.WithCompilationCache(cache)
+	}
+
+	r := wazero.NewRuntimeWithConfig(ctx, runtimeCfg)
+
+	// Register host callback functions before WASI
+	if err := registerHostCallbacks(ctx, r); err != nil {
+		r.Close(ctx)
+		if compilationCache != nil {
+			compilationCache.Close(ctx)
+		}
+		return nil, fmt.Errorf("register host callbacks: %w", err)
+	}
 
 	// Instantiate WASI
 	if _, err := wasi_snapshot_preview1.Instantiate(ctx, r); err != nil {
 		r.Close(ctx)
+		if compilationCache != nil {
+			compilationCache.Close(ctx)
+		}
 		return nil, fmt.Errorf("instantiate WASI: %w", err)
 	}
 
 	return &Runtime{
-		runtime: r,
-		config:  wazero.NewModuleConfig(),
+		runtime:  r,
+		config:   wazero.NewModuleConfig(),
+		cache:    compilationCache,
+		poolSize: poolSize,
 	}, nil
 }
 
@@ -107,6 +167,12 @@ func (r *Runtime) Close(ctx context.Context) error {
 	if r.runtime != nil {
 		if err := r.runtime.Close(ctx); err != nil {
 			return fmt.Errorf("close runtime: %w", err)
+		}
+	}
+
+	if r.cache != nil {
+		if err := r.cache.Close(ctx); err != nil {
+			return fmt.Errorf("close compilation cache: %w", err)
 		}
 	}
 
